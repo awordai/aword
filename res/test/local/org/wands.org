@@ -1,0 +1,44 @@
+* Wands
+
+Wands are a magical tool used in many traditions of witchcraft and wizardry. They are used to focus and direct energy, cast spells, and invoke magical beings. This document will describe a few notable ones.
+
+** Elder Wand
+
+*** Overview
+
+The Elder Wand, also known as the Deathstick or the Wand of Destiny, is one of the most powerful wands in the wizarding world. It's known for its history of changing hands by defeat, often violently.
+
+*** Appearance
+
+The Elder Wand is described as being made of elder wood and containing a core of Thestral tail hair. It is also described as being somewhat longer than the average wand, and bearing carvings resembling clusters of elderberries.
+
+** Holly Wand
+
+*** Overview
+
+Holly wands are often associated with magic involving protection, dreams, and magic for animals. In the wizarding world, one of the most famous Holly wands belonged to Harry Potter.
+
+*** Appearance
+
+Holly wands are generally made from the wood of the holly tree. They are often pale or cream in color, and may have a slightly waxy feel.
+
+** Yew Wand
+
+*** Overview
+
+Yew wands are among the rarer kinds of wands, often associated with power and ambition. They are known for their connection with dark magic, though they are not exclusively used for such.
+
+*** Appearance
+
+Yew wands are made from the wood of the yew tree. They are often dark in color, and may have a slightly rough texture.
+
+** Oak Wand
+
+*** Overview
+
+Oak wands are known for their strength and reliability. They are often associated with magic involving strength, protection, and healing.
+
+*** Appearance
+
+Oak wands are made from the wood of the oak tree. They are often brown in color, and may have a slightly coarse texture.
+
