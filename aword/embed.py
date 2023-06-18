@@ -16,7 +16,7 @@ from aword.apis import qdrant
 
 # Split a text into smaller chunks of size n, preferably ending at the
 # end of a paragraph or, if no end of paragraph is found, a sentence.
-def chunks(text, n, tokenizer):
+def split_in_chunks(text, n, tokenizer):
     """Yield successive n-sized chunks from text."""
     tokens = tokenizer.encode(re.sub(r'[ \t]+', ' ', text))
     i = 0
@@ -67,9 +67,9 @@ def create_embeddings(text, include_full_text_if_chunked=False, tokenizer=None):
     tokenizer = tokenizer or tiktoken.get_encoding(C['oai_embedding_encoding'])
 
     # Should just return the number of tokens and the text chunks
-    token_chunks, text_chunks = list(zip(*chunks(re.sub('\n+','\n', text),
-                                                 C['oai_embedding_chunk_size'],
-                                                 tokenizer)))
+    token_chunks, text_chunks = list(zip(*split_in_chunks(re.sub('\n+','\n', text),
+                                                          C['oai_embedding_chunk_size'],
+                                                          tokenizer)))
 
     # Split text_chunks into shorter arrays of max length 100
     text_chunks_arrays = [text_chunks[i:i+C['oai_max_texts_to_embed_batch_size']]
@@ -116,6 +116,7 @@ def embed_source_unit(payloads, source_unit_id=None):
 
     points = []
 
+    print('embedding', source_unit_id)
     for payload in payloads:
         for text_vector in create_embeddings(payload.body):
             payload_copy = payload.copy()
@@ -125,6 +126,8 @@ def embed_source_unit(payloads, source_unit_id=None):
                            text_vector['text']),
                 vector=text_vector['vector'],
                 payload=payload_copy))
+
+    print('... about to upsert', len(points), 'points for', source_unit_id)
     q_client.upsert(collection_name=C['qdrant_collection'],
                     points=points)
 

@@ -9,7 +9,10 @@ import aword.tools as T
 
 
 class State:
-    def __init__(self, db_path=None):
+    def __init__(self, db_path: str = None):
+        """
+        """
+        # Read the configuration file
         C = T.get_config('state')
         self.db_path = db_path or C['last_seen_db']
 
@@ -23,12 +26,13 @@ class State:
         else:
             self.db = {}
 
-    def get_last_seen(self, source, subsource):
+    def get_last_seen(self, source: str, subsource: str) -> str:
         return self.db.get(source, {}).get(subsource, None)
 
-    def update_last_seen(self, source, subsource):
+    def update_last_seen(self, source: str, subsource: str):
         if source not in self.db:
             self.db[source] = {}
+
         # Save the current datetime in UTC
         self.db[source][subsource] = datetime.now(utc)
 

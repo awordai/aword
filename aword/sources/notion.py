@@ -13,6 +13,9 @@ from aword.sources.state import State
 
 SourceName = 'notion'
 Timeout = 30
+Users = {}
+
+Testing = False
 
 
 def get_headers():
@@ -57,18 +60,35 @@ def fetch_all_pages_in_database(database_id: str) -> List:
     return all_pages
 
 
-def fetch_page_content(page_id: str) -> List:
+def fetch_block_children(block_id: str,
+                         sleeping: int = 0,
+                         seen_blocks: set = None) -> List:
     """It returns the actual content of the page, in the form of a
     list of blocks.
     """
-    url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+    print('Fetching block/page content for', block_id)
+    url = f"https://api.notion.com/v1/blocks/{block_id}/children"
     response = requests.get(url, headers=get_headers(), timeout=Timeout)
 
     if response.status_code != 200:
         raise RuntimeError(f"Request failed with status code {response.status_code}")
 
-    time.sleep(0.5)
-    return response.json()["results"]
+    content = response.json()["results"]
+
+    time.sleep(sleeping)
+
+    seen_blocks = seen_blocks if seen_blocks is not None else set([])
+    out = []
+    for block in content:
+        out.append(block)
+
+        if block['id'] not in seen_blocks:
+            seen_blocks.add(block['id'])
+
+            if block['has_children'] and block['type'] != 'child_page':
+                out += fetch_block_children(block['id'], sleeping, seen_blocks)
+
+    return out
 
 
 def fetch_page(page_id: str) -> Dict:
@@ -76,6 +96,7 @@ def fetch_page(page_id: str) -> Dict:
     'properties' object with things like the title, but not the page
     contents.
     """
+    print('Fetching page', page_id)
     url = f"https://api.notion.com/v1/pages/{page_id}"
     response = requests.get(url, headers=get_headers(), timeout=Timeout)
 
@@ -140,19 +161,22 @@ def extract_page_title(page: Dict) -> str:
 
 
 def fetch_user_data(user_id: str, sleeping: int = 0) -> str:
-    response = requests.get(f"https://api.notion.com/v1/users/{user_id}",
-                            headers=get_headers(),
-                            timeout=Timeout)
+    if user_id not in Users:
+        print('Fetching user data for', user_id)
+        response = requests.get(f"https://api.notion.com/v1/users/{user_id}",
+                                headers=get_headers(),
+                                timeout=Timeout)
 
-    if response.status_code != 200:
-        raise RuntimeError(f"Request failed with status code {response.status_code}")
+        if response.status_code != 200:
+            raise RuntimeError(f"Request failed with status code {response.status_code}")
+        user_data = response.json()
 
-    user_data = response.json()
+        if sleeping:
+            time.sleep(sleeping)
 
-    if sleeping:
-        time.sleep(sleeping)
+        Users[user_id] = user_data['name']
 
-    return user_data['name']
+    return Users[user_id]
 
 
 def fetch_page_authors(page: Dict, sleeping: int = 0) -> Tuple:
@@ -160,6 +184,7 @@ def fetch_page_authors(page: Dict, sleeping: int = 0) -> Tuple:
     last_edited_by_id = (created_by_id if 'last_edited_by' not in page
                          else page['last_edited_by']['id'])
 
+    print('Fetching page authors')
     created_by = fetch_user_data(created_by_id, sleeping)
     last_edited_by = (created_by if last_edited_by_id == created_by_id
                       else fetch_user_data(last_edited_by_id, sleeping))
@@ -255,10 +280,11 @@ def process_page(page_id: str,
         page = fetch_page(page_id)
         if sleeping:
             time.sleep(sleeping)
-        page_content = fetch_page_content(page_id)
+        page_content = fetch_block_children(page_id, sleeping=sleeping)
     except:
         print('Failed tying to fetch', page_id)
-        return
+        if Testing:
+            raise
 
     last_edited_tm = T.timestamp_as_utc(page.get(
         'last_edited_time', page['created_time']))
@@ -279,6 +305,9 @@ def process_page(page_id: str,
             state.update_last_seen(SourceName, short_page_id)
         except:
             print('Failed ingesting page', page_id)
+            if Testing:
+                raise
+
 
     if recurse_subpages:
         visited.add(short_page_id)
@@ -293,7 +322,7 @@ def process_page(page_id: str,
                              sleeping=sleeping)
 
 
-def ingest():
+def ingest(sleeping: int = 0.5):
     sources = T.get_source_config(SourceName)
 
     page_id_fact_types = []
@@ -306,6 +335,9 @@ def ingest():
             )
         except:
             print('Error preparing database for ingestion: ' + str(database))
+            if Testing:
+                raise
+
 
     for page in sources.get('pages', []):
         try:
@@ -313,7 +345,10 @@ def ingest():
                                         FactType(page['fact_type'])))
         except:
             print('Error preparing page for ingestion: ' + str(page))
+            if Testing:
+                raise
 
+    time.sleep(sleeping)
     state = State()
     for (page_id, fact_type) in page_id_fact_types:
         process_page(page_id,
@@ -321,7 +356,7 @@ def ingest():
                      state=state,
                      fact_type=fact_type,
                      recurse_subpages=True,
-                     sleeping=0.5)
+                     sleeping=sleeping)
 
 
 if __name__ == "__main__":
