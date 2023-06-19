@@ -1,0 +1,46 @@
+++ Cache database
+
++= 0-system.txt
+
+The data will be stored in a relational database. The embeddings will also be stored in a vector database.
+
+The data hierarchy in the relational database is as follows:
+
+- source_unit: a unit from a source, like a Notion page, a file, an activity, or a web page. Its fields are
+
+ + source_unit_id (unique), a unique string derived from the source
+ + source (one of 'notion', 'local', 'crowddev', 'linear', 'website')
+ + URI
+ + created_by (string)
+ + last_edited_by
+ + last_edited_timestamp
+ + last_embedded_timestamp
+ + fact_type ('reference' or 'historical')
+ + scope ('confidential', 'general', 'public', 'support')
+ + summary
+ + body with the all the text
+ + metadata, a dictionary
+
+- section: a subdivision of the source unit that has meaning.  For example, in a Notion page, in a Markdown file, or in a web page it would be the content after a heading.  Its fields are:
+
+ + section_id (unique, it should be a hash from the source_unit_id and the content so that it changes when the content changes)
+ + source_unit_id foreign key
+ + URI (which may be the address of the block in notion, or an anchor in a web page)
+ + created_by (string)
+ + last_edited_by
+ + last_edited_timestamp
+ + last_embedded_timestamp
+ + body with the text
+ + headings (the list of headings leading up to it, like ['heading', 'subheading', 'subsubheading'])
+ + metadata, a dictionary
+
+- Chunk: when embedding a section we may have to split it into several chunks if the content is too large.  Its fields are:
+
+ + chunk_id (unique, should be a hash from the section_id and the content)
+ + section_id foreign key
+ + body with the text
+ + vector embedding
+
+++ Prompt
+
+Can you make a class that implements this with sqlite?

@@ -15,8 +15,8 @@ def test_get_embeddings():
 
 def test_chunks(tokenizer):
 
-    tk, txt = list(zip(*E.chunks('hola que tal. Esto es una prueba de chunk',
-                                 4, tokenizer)))
+    tk, txt = list(zip(*E.split_in_chunks('hola que tal. Esto es una prueba de chunk',
+                                          4, tokenizer)))
     assert txt[0] == 'hola que tal.'
     assert tokenizer.encode(txt[0]) == tk[0]
     assert tokenizer.encode(txt[-1]) == tk[-1]
