@@ -3,7 +3,7 @@
 import aword.embed as E
 import aword.tools as T
 from aword.apis import qdrant
-from aword.payload import Payload
+from aword.payload import Segment
 from aword.apis.oai import get_embeddings
 
 
@@ -33,13 +33,13 @@ def test_embed():
         with open('res/test/local/org/trees.org', encoding='utf-8') as trees_in:
             txt = wands_in.read() + trees_in.read()
             # txt = trees_in.read()
-            payload = Payload(txt,
+            segment = Segment(txt,
                               uri='file://uri_to_file_path',
                               headings=['Wands', 'Wand composition'])
 
-            points = E.embed_source_unit([payload], source_unit_id='1')
+            segments = E.embed_source_unit([segment], source_unit_id='1')
 
-            assert points[1].payload['body'] == (
+            assert segments[0].chunks[1].text == (
                 'Pine trees are evergreen, coniferous resinous trees in the genus '
                 'Pinus. They are known for their distinctive pine cones and are '
                 'often associated with Christmas.\n'
@@ -62,11 +62,11 @@ def test_embed():
 
             # If we embed again the same source_unit_id it should first delete the
             # previous version
-            E.embed_source_unit([payload], source_unit_id='1')
+            E.embed_source_unit([segment], source_unit_id='1')
             assert qdrant.count() == 2
 
             # But if we embed it with a different source_unit_id it should make new
             # points
-            points = E.embed_source_unit([payload], source_unit_id='2')
-            assert len(points) == 2
+            segments = E.embed_source_unit([segment], source_unit_id='2')
+            assert len(segments[0].chunks) == 2
             assert qdrant.count() == 4

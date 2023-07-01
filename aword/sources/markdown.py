@@ -7,14 +7,14 @@ import mistune
 from mistune.renderers.markdown import MarkdownRenderer
 
 import aword.tools as T
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 
 
 class CustomMarkdownRenderer(MarkdownRenderer):
     def __init__(self):
         super().__init__()
         self.current_heading_chain = []
-        self.chunks = []
+        self.segments = []
 
     def heading(self, token, state) -> str:
         level = token['attrs']['level']
@@ -26,8 +26,8 @@ class CustomMarkdownRenderer(MarkdownRenderer):
 
     def paragraph(self, token, state) -> str:
         text = self.render_children(token, state)
-        self.chunks.append(Payload(body=text,
-                                   headings=list(self.current_heading_chain)))
+        self.segments.append(Segment(body=text,
+                                     headings=list(self.current_heading_chain)))
         return ''
 
 
@@ -35,7 +35,8 @@ def parse(file_path: str,
           uri: str,
           source: str,
           author: str,
-          fact_type: FactType,
+          category: str,
+          scope: str,
           timestamp: datetime,
           metadata: Dict[str, Any] = None):
 
@@ -47,32 +48,35 @@ def parse(file_path: str,
 
     anchors_so_far = {}
 
-    out = renderer.chunks
-    for payload in out:
-        payload.source_unit_id = uri
+    out = renderer.segments
+    for segment in out:
+        segment.source_unit_id = uri
 
-        anchor, anchors_so_far = T.generate_anchor(payload.headings, anchors_so_far)
-        payload.uri = uri + anchor
-        payload.created_by = author
-        payload.source = source
-        payload.fact_type = FactType(fact_type)
-        payload.timestamp = timestamp
-        payload.metadata = (metadata or {}).copy()
+        anchor, anchors_so_far = T.generate_anchor(segment.headings, anchors_so_far)
+        segment.uri = uri + anchor
+        segment.created_by = author
+        segment.source = source
+        segment.category = category
+        segment.scope = scope
+
+        segment.last_edited_timestamp = timestamp
+        segment.metadata = (metadata or {}).copy()
 
     return out
 
 
 def main():
     fname = 'res/test/local/butterfly-biology.md'
-    chunks = parse(fname,
-                   T.file_to_uri(fname),
-                   source='local:altair.local',
-                   author='Author',
-                   fact_type=FactType.reference,
-                   timestamp=T.timestamp_as_utc())
+    segments = parse(fname,
+                     T.file_to_uri(fname),
+                     source='local:altair.local',
+                     author='Author',
+                     category='Reference',
+                     scope='confidential',
+                     timestamp=T.timestamp_as_utc())
 
     from pprint import pprint
-    pprint(chunks)
+    pprint(segments)
 
 
 if __name__ == '__main__':

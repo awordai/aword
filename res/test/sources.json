@@ -4,14 +4,15 @@
       {
         "id": "89d19764606c42d7b061e28c6c90c469",
         "doc": "Lord of the Rings",
-        "fact_type": "historical"
+        "category": "historical",
+        "scope": "confidential"
       }
     ],
     "pages": [
       {
         "id": "7c1003c6426146a2ae485e8e3bfe600b",
         "doc": "Notion test pages",
-        "fact_type": "reference"
+        "category": "historical",
       }
     ]
   },
@@ -20,12 +21,12 @@
       "directory": "res/test/local",
       "extensions": ["md", "org", "txt"],
       "author": "unknown",
-      "fact_type": "reference"
+      "category": "historical",
+      "scope": "confidential"
     },
     {
       "directory": "res/test/local/short",
       "author": "John Doe",
-      "fact_type": "historical"
     }
   ]
 }

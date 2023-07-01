@@ -44,6 +44,18 @@ def create_collection():
     client.create_payload_index(collection_name=C['qdrant_collection'],
                                 field_name=C['qdrant_suid_field'],
                                 field_schema="keyword")
+    client.create_payload_index(collection_name=C['qdrant_collection'],
+                                field_name=C['qdrant_source_field'],
+                                field_schema="keyword")
+
+    # TODO there can be several scopes (it's actually an array), check that the schema is keyword.
+    client.create_payload_index(collection_name=C['qdrant_collection'],
+                                field_name=C['qdrant_scope_field'],
+                                field_schema="keyword")
+
+    client.create_payload_index(collection_name=C['qdrant_collection'],
+                                field_name=C['qdrant_category_field'],
+                                field_schema="keyword")
 
 
 def count():

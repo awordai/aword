@@ -5,14 +5,15 @@ from datetime import datetime
 from typing import Any, Dict
 
 import aword.tools as T
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 
 
 def parse(file_path: str,
           uri: str,
           source: str,
           author: str,
-          fact_type: FactType,
+          category: str,
+          scope: str,
           timestamp: datetime,
           metadata: Dict[str, Any] = None):
 
@@ -21,7 +22,7 @@ def parse(file_path: str,
 
     current_heading_chain = []
     current_text = []
-    chunks = []
+    segments = []
     anchors_so_far = {}
 
     for line in org_lines:
@@ -35,15 +36,16 @@ def parse(file_path: str,
             if text_so_far:
                 anchor, anchors_so_far = T.generate_anchor(current_heading_chain,
                                                            anchors_so_far)
-                chunks.append(
-                    Payload(body=text_so_far,
+                segments.append(
+                    Segment(body=text_so_far,
+                            source=source,
                             source_unit_id=uri,
+                            category=category,
+                            scope=scope,
                             uri=uri + anchor,
                             headings=list(current_heading_chain),
                             created_by=author,
-                            source=source,
-                            fact_type=fact_type,
-                            timestamp=timestamp,
+                            last_edited_timestamp=timestamp,
                             metadata=(metadata or {}).copy()))
                 current_text = []
 
@@ -57,15 +59,16 @@ def parse(file_path: str,
     if current_text:
         anchor, _ = T.generate_anchor(current_heading_chain, anchors_so_far)
 
-        chunks.append(
-            Payload(body=' '.join(current_text).strip(),
+        segments.append(
+            Segment(body=' '.join(current_text).strip(),
+                    source=source,
                     source_unit_id=uri,
+                    category=category,
+                    scope=scope,
                     uri=uri + anchor,
                     headings=list(current_heading_chain),
                     created_by=author,
-                    source=source,
-                    fact_type=fact_type,
-                    timestamp=timestamp,
+                    last_edited_timestamp=timestamp,
                     metadata=(metadata or {}).copy()))
 
-    return chunks
+    return segments

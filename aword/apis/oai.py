@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+from typing import List
+
 import openai
 
 from tenacity import retry, wait_random_exponential
@@ -25,7 +27,7 @@ def ensure_api():
 @retry(wait=wait_random_exponential(min=1, max=20),
        stop=stop_after_attempt(6),
        retry=retry_if_not_exception_type(openai.InvalidRequestError))
-def get_embeddings(text_or_tokens_array, model=None):
+def get_embeddings(text_or_tokens_array, model=None) -> List[List[float]]:
     ensure_api()
     return [r['embedding'] for r in
             openai.Embedding.create(input=text_or_tokens_array,

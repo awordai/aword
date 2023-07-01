@@ -7,7 +7,7 @@ from typing import Dict, List, Callable, Tuple
 import requests
 
 import aword.tools as T
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 from aword.embed import embed_source_unit
 from aword.sources.state import State
 
@@ -199,7 +199,8 @@ def ingest_page(title: str,
                 url: str,
                 timestamp: str,
                 content: List,
-                fact_type: FactType):
+                category: str,
+                scope: str):
 
     print('Ingesting', title)
 
@@ -212,7 +213,7 @@ def ingest_page(title: str,
                 out.append(rich_text.get('plain_text'))
         return ' '.join(out)
 
-    payloads = []
+    segments = []
     current_heading_chain = []
     current_text = []
     current_heading_id = ''
@@ -228,9 +229,12 @@ def ingest_page(title: str,
                                                 last_edited_by_id)
                                             else
                                             fetch_user_data(block_last_edited_by_id))
-                    payloads.append(
-                        Payload(body=text_so_far,
+                    segments.append(
+                        Segment(body=text_so_far,
+                                source=SourceName,
                                 source_unit_id=source_unit_id,
+                                category=category,
+                                scope=scope,
                                 uri=url + (('#' + current_heading_id)
                                            if current_heading_id else ''),
                                 # Extract heading texts from the stack
@@ -238,9 +242,7 @@ def ingest_page(title: str,
                                                     current_heading_chain],
                                 created_by=created_by,
                                 last_edited_by=block_last_edited_by,
-                                source=SourceName,
-                                fact_type=fact_type,
-                                timestamp=timestamp))
+                                last_edited_timestamp=timestamp))
                     current_text = []
                     current_heading_id = block['id'].replace('-', '')
 
@@ -259,13 +261,14 @@ def ingest_page(title: str,
                 if text:
                     current_text.append(text)
 
-    embed_source_unit(payloads, source_unit_id=source_unit_id)
+    return embed_source_unit(segments, source_unit_id=source_unit_id)
 
 
 def process_page(page_id: str,
                  ingesting_function: Callable,
                  state: State,
-                 fact_type: FactType,
+                 category: str = '',
+                 scope: str = '',
                  recurse_subpages: bool = False,
                  visited_pages: set = None,
                  sleeping: int = 0):
@@ -301,7 +304,8 @@ def process_page(page_id: str,
                                url=page['url'],
                                timestamp=last_edited_tm,
                                content=page_content,
-                               fact_type=fact_type)
+                               category=category,
+                               scope=scope)
             state.update_last_seen(SourceName, short_page_id)
         except:
             print('Failed ingesting page', page_id)
@@ -316,7 +320,8 @@ def process_page(page_id: str,
                 process_page(block['id'],
                              ingesting_function,
                              state=state,
-                             fact_type=fact_type,
+                             category=category,
+                             scope=scope,
                              recurse_subpages=True,
                              visited_pages=visited,
                              sleeping=sleeping)
@@ -325,36 +330,29 @@ def process_page(page_id: str,
 def ingest(sleeping: int = 0.5):
     sources = T.get_source_config(SourceName)
 
-    page_id_fact_types = []
+    page_id_categories_scopes = []
     for database in sources.get('databases', []):
-        try:
-            fact_type = FactType(database['fact_type'])
-            page_id_fact_types.extend(
-                [(page_id, fact_type) for page_id in
-                 fetch_all_pages_in_database(database['id'])]
-            )
-        except:
-            print('Error preparing database for ingestion: ' + str(database))
-            if Testing:
-                raise
+        page_id_categories_scopes.extend(
+            [(page_id,
+              database.get('category', ''),
+              database.get('scope', '')) for page_id in
+             fetch_all_pages_in_database(database['id'])]
+        )
 
 
     for page in sources.get('pages', []):
-        try:
-            page_id_fact_types.append((page['id'],
-                                        FactType(page['fact_type'])))
-        except:
-            print('Error preparing page for ingestion: ' + str(page))
-            if Testing:
-                raise
+        page_id_categories_scopes.append((page['id'],
+                                          page.get('category', ''),
+                                          page.get('scope', '')))
 
     time.sleep(sleeping)
     state = State()
-    for (page_id, fact_type) in page_id_fact_types:
+    for (page_id, category, scope) in page_id_categories_scopes:
         process_page(page_id,
                      ingesting_function=ingest_page,
                      state=state,
-                     fact_type=fact_type,
+                     category=category,
+                     scope=scope,
                      recurse_subpages=True,
                      sleeping=sleeping)
 

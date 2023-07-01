@@ -6,7 +6,6 @@ import socket
 from pytz import utc
 
 import aword.tools as T
-from aword.payload import FactType
 from aword.embed import embed_source_unit
 
 from aword.sources.state import State
@@ -26,7 +25,7 @@ def ingest(only_in_directory=None):
         "text": plain.parse,
     }
 
-    embedded_payloads = []
+    embedded_segments = []
     source_name = 'local'
     hostname = socket.gethostname()
 
@@ -37,7 +36,8 @@ def ingest(only_in_directory=None):
             continue
 
         author = source['author']
-        fact_type = FactType(source['fact_type'])
+        category = source.get('category', '')
+        scope = source.get('scope', '')
 
         extensions = source.get('extensions', supported_extensions)
         for dirpath, _, filenames in os.walk(directory):
@@ -55,21 +55,23 @@ def ingest(only_in_directory=None):
                     if last_seen_dt is None or file_modified_dt > last_seen_dt:
                         uri = T.file_to_uri(file_path)
                         parser = parsers[file_extension]
-                        payloads = parser(
+                        segments = parser(
                             file_path,
                             uri=uri,
                             source=source_name + ':' + hostname,
                             author=author,
-                            fact_type=fact_type,
+                            category=category,
+                            scope=scope,
                             timestamp=file_modified_dt,
                             metadata={'directory': directory})
 
-                        embed_source_unit(payloads, source_unit_id=file_path)
-                        embedded_payloads += payloads
+
+                        embedded_segments += embed_source_unit(segments, source_unit_id=file_path)
 
                     state.update_last_seen(source_name, file_path)
 
-    return embedded_payloads
+    ### TODO send the embedded segments to state for edge storage
+    return embedded_segments
 
 
 def main():

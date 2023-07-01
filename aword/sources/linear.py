@@ -8,7 +8,7 @@ from typing import Dict, List
 import requests
 
 import aword.tools as T
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 from aword.embed import embed_source_unit
 from aword.sources.state import State
 
@@ -105,7 +105,7 @@ def get_issues(from_timestamp: datetime,
 
 
 def ingest_issues(issues: List[Dict]):
-    payloads = []
+    segments = []
 
     for issue in issues:
         labels = ", ".join([label["name"] for label in issue["labels"]["nodes"]])
@@ -122,17 +122,18 @@ def ingest_issues(issues: List[Dict]):
                     "assignee": assignee,
                     "parent": parent_id,}
 
-        payloads.append(Payload(issue['description'] if issue['description'] else '',
+        segments.append(Segment(issue['description'] if issue['description'] else '',
                                 source_unit_id=issue['id'],
                                 uri=issue['url'],
                                 headings=[],
                                 created_by=creator,
                                 source=SourceName,
-                                fact_type=FactType.historical,
-                                timestamp=issue["updatedAt"],
+                                category='historical',
+                                scope='confidential',
+                                last_edited_timestamp=issue["updatedAt"],
                                 metadata=metadata))
 
-    embed_source_unit(payloads)
+    embed_source_unit(segments)
 
 
 def ingest():

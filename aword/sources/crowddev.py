@@ -7,7 +7,7 @@ from typing import Dict, List
 import requests
 
 import aword.tools as T
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 from aword.embed import embed_source_unit
 from aword.sources.state import State
 
@@ -48,23 +48,24 @@ def get_activities(from_timestamp: datetime, offset: int = 0):
 
 
 def ingest_activities(activities: List[Dict]):
-    payloads = []
+    segments = []
 
     for activity in activities:
         # TODO: is it fine to have the platform as part of the metadata?
         metadata = activity['attributes']
         metadata['platform'] = activity['platform']
-        payloads.append(Payload(activity['body'],
+        segments.append(Segment(activity['body'],
                                 source_unit_id=activity['id'],
                                 uri=activity['url'],
                                 headings=[],
                                 created_by=activity['member']['displayName'],
                                 source=SourceName,
-                                fact_type=FactType.historical,
-                                timestamp=activity['createdAt'],
+                                category='historical',
+                                scope='confidential',
+                                last_edited_timestamp=activity['createdAt'],
                                 metadata=metadata))
 
-    embed_source_unit(payloads)
+    return embed_source_unit(segments)
 
 
 def ingest():

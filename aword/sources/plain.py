@@ -3,14 +3,15 @@
 from datetime import datetime
 from typing import Any, Dict
 
-from aword.payload import Payload, FactType
+from aword.payload import Segment
 
 
 def parse(file_path: str,
           uri: str,
           source: str,
           author: str,
-          fact_type: FactType,
+          category: str,
+          scope: str,
           timestamp: datetime,
           metadata: Dict[str, Any] = None):
 
@@ -18,12 +19,13 @@ def parse(file_path: str,
     chunked during embedding if required.
     """
     with open(file_path, 'r', encoding='utf-8') as fin:
-        return [Payload(body=fin.read().strip(),
+        return [Segment(body=fin.read().strip(),
+                        source=source,
                         source_unit_id=uri,
+                        category=category,
+                        scope=scope,
                         uri=uri,
                         headings=[],
                         created_by=author,
-                        source=source,
-                        fact_type=fact_type,
-                        timestamp=timestamp,
+                        last_edited_timestamp=timestamp,
                         metadata=(metadata or {}).copy())]

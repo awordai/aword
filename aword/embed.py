@@ -10,6 +10,7 @@ import tiktoken
 from numpy import array, average
 
 import aword.tools as T
+from aword.payload import Chunk, Segment
 from aword.apis.oai import get_embeddings
 from aword.apis import qdrant
 
@@ -81,27 +82,27 @@ def create_embeddings(text, include_full_text_if_chunked=False, tokenizer=None):
     for text_chunks_array in text_chunks_arrays:
         embeddings += get_embeddings(text_chunks_array)
 
-    text_vectors = [{'text': t,
-                     'vector': e}
-                    for t, e in (zip(text_chunks, embeddings))]
+    chunks = [Chunk(text=t,
+                    vector=e)
+              for t, e in (zip(text_chunks, embeddings))]
 
-    if include_full_text_if_chunked and len(text_vectors) > 1:
+    if include_full_text_if_chunked and len(chunks) > 1:
         total_tokens = sum(len(chunk) for chunk in token_chunks)
         if total_tokens >= C['oai_embedding_ctx_length']:
             average_embedding = get_col_average_from_list_of_lists(embeddings)
         else:
             average_embedding = get_embeddings(['\n\n'.join(text_chunks)])[0]
-        text_vectors.append({'text': text,
-                             'vector': average_embedding})
+        chunks.append(Chunk(text=text,
+                            vector=average_embedding))
 
-    return text_vectors
+    return chunks
 
 
 def make_id(source_unit_id, text):
     return str(uuid.uuid5(uuid.NAMESPACE_X500, source_unit_id + text))
 
 
-def embed_source_unit(payloads, source_unit_id=None):
+def embed_source_unit(segments, source_unit_id=None):
     """The source_unit_id is the id of the atomic source unit. If the
     source is notion, for example, the atomic source unit is the
     document, and the source_unit_id would be the document id. If the
@@ -116,19 +117,30 @@ def embed_source_unit(payloads, source_unit_id=None):
 
     points = []
 
+    # We don't want to mutate the incoming segments
+    out_segments = []
+
     print('embedding', source_unit_id)
-    for payload in payloads:
-        for text_vector in create_embeddings(payload.body):
-            payload_copy = payload.copy()
-            payload_copy.update({'body': text_vector['text']})
-            points.append(PointStruct(
-                id=make_id(source_unit_id or payload.source_unit_id,
-                           text_vector['text']),
-                vector=text_vector['vector'],
-                payload=payload_copy))
+    for segment in segments:
+        out_segment = Segment.copy(segment)
+        out_segment.chunks = []
+
+        # TODO Maybe it should include the headings in the embedding
+        for chunk in create_embeddings(segment.body):
+            payload = Segment.copy(segment)
+            payload.body = chunk.text
+            chunk.vector_db_id = make_id(source_unit_id or payload.source_unit_id,
+                                         chunk.text)
+
+            points.append(PointStruct(id=chunk.vector_db_id,
+                                      vector=chunk.vector,
+                                      payload=payload))
+            out_segment.chunks.append(chunk)
+
+        out_segments.append(out_segment)
 
     print('... about to upsert', len(points), 'points for', source_unit_id)
     q_client.upsert(collection_name=C['qdrant_collection'],
                     points=points)
 
-    return points
+    return out_segments
