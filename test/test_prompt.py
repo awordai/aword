@@ -2,6 +2,7 @@
 
 import os
 import time
+import socket
 
 import aword.tools as T
 from aword.apis import qdrant, oai
@@ -50,11 +51,13 @@ def test_prompt():
     timestamp = T.timestamp_as_utc().isoformat()
     all_context[0]['timestamp'] = timestamp
 
+    hostname = socket.gethostname()
+
     abs_test_dir = os.path.abspath(test_dir)
     assert format_context(all_context[0]) == (
         '```\n'
         f'url_or_file: {abs_test_dir}/galicia.md\n'
-        'source: local:altair.home\n'
+        f'source: local:{hostname}\n'
         'created_by: John Doe\n'
         'fact_type: historical\n'
         f'timestamp: {timestamp}\n'
