@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import datetime
 import pickle
 import uuid
 import json
@@ -13,7 +14,8 @@ import aword.tools as T
 
 def create_connection():
     try:
-        conn = sqlite3.connect(':memory:')  # create a memory database for demonstration
+        C = T.get_config('edge')
+        conn = sqlite3.connect(C['sqlite_db_file'])
         conn.row_factory = sqlite3.Row
         return conn
     except Error as e:
@@ -36,7 +38,9 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
     return None
 
 
-class SourceUnit:
+
+
+class SourceUnitDB:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
         self.create_table()
@@ -52,7 +56,7 @@ class SourceUnit:
                     last_edited_by TEXT,
                     last_edited_timestamp TIMESTAMP,
                     last_embedded_timestamp TIMESTAMP,
-                    fact_type TEXT,
+                    category TEXT,
                     scope TEXT,
                     summary TEXT,
                     body TEXT,
@@ -185,7 +189,7 @@ class Section:
         return out
 
 
-class Chunk:
+class ChunkDB:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
         self.create_table()

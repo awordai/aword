@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+from enum import Enum
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
@@ -8,7 +9,15 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 
 import aword.tools as T
 
+
 QClient = None
+
+
+class VectorDbFields(Enum):
+    SOURCE = 'source'
+    SOURCE_UNIT_ID = 'source_unit_id'
+    CATEGORY = 'category'
+    SCOPE = 'scope'
 
 
 def get_qdrant_client():
@@ -42,19 +51,20 @@ def create_collection():
                                     distance=Distance.COSINE))
 
     client.create_payload_index(collection_name=C['qdrant_collection'],
-                                field_name=C['qdrant_suid_field'],
+                                field_name=VectorDbFields.SOURCE_UNIT_ID.value,
                                 field_schema="keyword")
+
     client.create_payload_index(collection_name=C['qdrant_collection'],
-                                field_name=C['qdrant_source_field'],
+                                field_name=VectorDbFields.SOURCE.value,
+                                field_schema="keyword")
+
+    client.create_payload_index(collection_name=C['qdrant_collection'],
+                                field_name=VectorDbFields.CATEGORY.value,
                                 field_schema="keyword")
 
     # TODO there can be several scopes (it's actually an array), check that the schema is keyword.
     client.create_payload_index(collection_name=C['qdrant_collection'],
-                                field_name=C['qdrant_scope_field'],
-                                field_schema="keyword")
-
-    client.create_payload_index(collection_name=C['qdrant_collection'],
-                                field_name=C['qdrant_category_field'],
+                                field_name=VectorDbFields.SCOPE.value,
                                 field_schema="keyword")
 
 
@@ -86,5 +96,5 @@ def clean_source_unit(source_unit_id):
     C = T.get_config('qdrant')
     client.delete(collection_name=C['qdrant_collection'],
                   points_selector=Filter(must=[
-                      FieldCondition(key=C['qdrant_suid_field'],
+                      FieldCondition(key=VectorDbFields.SOURCE_UNIT_ID.value,
                                      match=MatchValue(value=source_unit_id))]))

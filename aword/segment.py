@@ -1,49 +1,23 @@
 # -*- coding: utf-8 -*-
 
+import datetime
+from typing import Optional, Dict, Any, List, Union
 
 
-class _Chunk(dict):
-    def __init__(self,
-                 text: str,
-                 vector: List[float] = None,
-                 vector_db_id: str = ''):
-        self.text = text
-        self.vector = vector
-        self.vector_db_id = vector_db_id
-
-    def __getattr__(self, name):
-        if name in self:
-            return self[name]
-        raise AttributeError(f"No such attribute: {name}")
-
-    def __setattr__(self, name, value):
-        if name not in ('text', 'vector', 'vector_db_id'):
-            raise AttributeError('Cannot have a chunk with attribute ' + name)
-        self[name] = value
-
-
-class _Segment(dict):
+class Segment(dict):
     def __init__(self,
                  body: str,
-                 source: str = '',
-                 source_unit_id: str = None,
-                 category: str = '',
-                 scope: str = '',
                  uri: str = None,
                  headings: List[str] = None,
                  created_by: str = None,
                  last_edited_by: str = None,
                  last_edited_timestamp: Union[datetime.datetime, str] = None,
                  last_embedded_timestamp: Union[datetime.datetime, str] = None,
-                 chunks: List[Chunk] = None,
                  metadata: Dict[str, Any] = None):
+
         super().__init__()
 
         self['body'] = body
-        self['source_unit_id'] = source_unit_id
-        self['source'] = source
-        self['category'] = category
-        self['scope'] = scope
 
         # Setters will validate
         self.uri = uri
@@ -53,8 +27,21 @@ class _Segment(dict):
         self['headings'] = headings or []
         self['created_by'] = created_by
         self['last_edited_by'] = last_edited_by or created_by
-        self.chunks = chunks
         self['metadata'] = metadata or {}
+
+
+        for key, value in vector_db_fields.items():
+            if key not in VectorDbFields.__members__:
+                raise ValueError(f"Invalid key: {key}. "
+                                 f"Must be one of {list(VectorDbFields.__members__.keys())}")
+            self[key] = value
+
+        for field in VectorDbFields:
+            if not field.value in self:
+                self[field.value] = ''
+
+        if not self[VectorDbFields.SOURCE.value]:
+            raise ValueError('A Segment needs a source')
 
     def __getattr__(self, name):
         if name in self:
@@ -71,5 +58,8 @@ class _Segment(dict):
                 value = list(value)
             elif not isinstance(value, list):
                 value = [value]
-
         self[name] = value
+
+    @classmethod
+    def copy(cls, instance):
+        return cls(**copy.deepcopy(dict(instance)))
