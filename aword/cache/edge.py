@@ -57,13 +57,9 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
         out['last_edited_timestamp'] = T.timestamp_as_utc(
             out['last_edited_timestamp'] + ('+00:00' if '+' not in out['last_edited_timestamp']
                                             else ''))
-        if out['last_embedded_timestamp']:
-            out['last_embedded_timestamp'] = T.timestamp_as_utc(
-                out['last_embedded_timestamp'] + (
-                    '+00:00' if '+' not in out['last_embedded_timestamp']
-                    else ''))
-        else:
-            out['last_embedded_timestamp'] = None
+        out['added_timestamp'] = T.timestamp_as_utc(
+            out['added_timestamp'] + ('+00:00' if '+' not in out['added_timestamp']
+                                            else ''))
         out['metadata'] = json.loads(out['metadata']) or {}
         out['segments'] = pickle.loads(out['segments']) or []
         return out
@@ -87,7 +83,7 @@ class SourceUnitDB(Cache):
                     created_by TEXT,
                     last_edited_by TEXT,
                     last_edited_timestamp TIMESTAMP,
-                    last_embedded_timestamp TIMESTAMP,
+                    added_timestamp TIMESTAMP,
                     {Category} TEXT,
                     {Scope} TEXT,
                     summary TEXT,
@@ -121,7 +117,7 @@ class SourceUnitDB(Cache):
                     created_by TEXT,
                     last_edited_by TEXT,
                     last_edited_timestamp TIMESTAMP,
-                    last_embedded_timestamp TIMESTAMP,
+                    added_timestamp TIMESTAMP,
                     {Category} TEXT,
                     {Scope} TEXT,
                     summary TEXT,
@@ -148,7 +144,7 @@ class SourceUnitDB(Cache):
                 existing_record['created_by'],
                 existing_record['last_edited_by'],
                 existing_record['last_edited_timestamp'],
-                existing_record['last_embedded_timestamp'],
+                existing_record['added_timestamp'],
                 existing_record[Category],
                 existing_record[Scope],
                 existing_record['summary'],
@@ -170,7 +166,7 @@ class SourceUnitDB(Cache):
             summary: str,
             segments: List[Segment],
             metadata: Dict = None,
-            last_embedded_timestamp: datetime = None,
+            added_timestamp: datetime = None,
             **vector_db_fields):
 
         existing_record = self.get(vector_db_fields[Source],
@@ -189,7 +185,7 @@ class SourceUnitDB(Cache):
                                   created_by,
                                   last_edited_by,
                                   timestamp_str(last_edited_timestamp),
-                                  timestamp_str(last_embedded_timestamp),
+                                  timestamp_str(added_timestamp or datetime.now(utc)),
                                   vector_db_fields.get(Category, ''),
                                   vector_db_fields.get(Scope, ''),
                                   summary,
@@ -213,12 +209,13 @@ class SourceUnitDB(Cache):
                        f"{Source}=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
-    def get_unembedded(self) -> List[Dict[str, Any]]:
+    def get_unembedded(self, last_embedded_timestamp) -> List[Dict[str, Any]]:
+        last_embedded_timestamp_str = timestamp_str(last_embedded_timestamp)
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM source_unit
-            WHERE last_embedded_timestamp IS NULL OR last_embedded_timestamp < last_edited_timestamp
-        """)
+            WHERE added_timestamp > ? OR last_edited_timestamp > ?
+        """, (last_embedded_timestamp_str, last_embedded_timestamp_str))
 
         rows = cursor.fetchall()
         return [timestamps_to_datetimes(row) for row in rows]

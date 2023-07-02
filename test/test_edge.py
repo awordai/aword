@@ -87,16 +87,16 @@ def test_get_unembedded():
            created_by='test_creator',
            last_edited_by='editor',
            last_edited_timestamp=datetime.now(utc),
-           last_embedded_timestamp=datetime.now(utc) - relativedelta(days=1),
+           added_timestamp=datetime.now(utc) - relativedelta(days=1),
            summary='test_summary 3',
            segments=[], **vector_db_fields)
 
-    results = su.get_unembedded()
+    last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc) - relativedelta(days=2)
+    results = su.get_unembedded(last_embedded_timestamp)
 
     assert len(results) == 2
     for result in results:
-        assert (result['last_embedded_timestamp'] is None or
-                result['last_embedded_timestamp'] < result['last_edited_timestamp'])
+        assert result['added_timestamp'] < result['last_edited_timestamp']
 
 
 def test_update_and_history():
