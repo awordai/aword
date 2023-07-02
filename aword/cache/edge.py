@@ -4,6 +4,7 @@ import datetime
 import pickle
 import json
 from itertools import groupby
+import uuid
 
 import sqlite3
 from sqlite3 import Error
@@ -15,10 +16,16 @@ from pytz import utc
 import aword.tools as T
 from aword.vdbfields import VectorDbFields
 from aword.segment import Segment
+from aword.chunk import Chunk
 from aword.cache import Cache
 
 
 DbConnection = None
+
+Source = VectorDbFields.SOURCE.value
+Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
+Category = VectorDbFields.CATEGORY.value
+Scope = VectorDbFields.SCOPE.value
 
 
 def get_connection(in_memory=False):
@@ -63,7 +70,7 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
     return None
 
 
-class SourceUnit(Cache):
+class SourceUnitDB(Cache):
     def __init__(self, in_memory=False):
         self.conn = get_connection(in_memory)
         self.create_table()
@@ -74,19 +81,19 @@ class SourceUnit(Cache):
         try:
             self.conn.execute(f"""
                 CREATE TABLE source_unit (
-                    {VectorDbFields.SOURCE_UNIT_ID.value} TEXT,
-                    {VectorDbFields.SOURCE.value} TEXT,
+                    {Source} TEXT,
+                    {Source_unit_id} TEXT,
                     uri TEXT,
                     created_by TEXT,
                     last_edited_by TEXT,
                     last_edited_timestamp TIMESTAMP,
                     last_embedded_timestamp TIMESTAMP,
-                    {VectorDbFields.CATEGORY.value} TEXT,
-                    {VectorDbFields.SCOPE.value} TEXT,
+                    {Category} TEXT,
+                    {Scope} TEXT,
                     summary TEXT,
                     segments BLOB,
                     metadata TEXT,
-                    PRIMARY KEY({VectorDbFields.SOURCE_UNIT_ID.value}, {VectorDbFields.SOURCE.value})
+                    PRIMARY KEY({Source_unit_id}, {Source})
                 )
             """)
         except Error as e:
@@ -108,20 +115,20 @@ class SourceUnit(Cache):
         try:
             self.conn.execute(f"""
                 CREATE TABLE source_unit_history (
-                    {VectorDbFields.SOURCE_UNIT_ID.value} TEXT,
-                    {VectorDbFields.SOURCE.value} TEXT,
+                    {Source} TEXT,
+                    {Source_unit_id} TEXT,
                     uri TEXT,
                     created_by TEXT,
                     last_edited_by TEXT,
                     last_edited_timestamp TIMESTAMP,
                     last_embedded_timestamp TIMESTAMP,
-                    {VectorDbFields.CATEGORY.value} TEXT,
-                    {VectorDbFields.SCOPE.value} TEXT,
+                    {Category} TEXT,
+                    {Scope} TEXT,
                     summary TEXT,
                     segments BLOB,
                     metadata TEXT,
                     deleted TIMESTAMP,
-                    PRIMARY KEY({VectorDbFields.SOURCE_UNIT_ID.value}, {VectorDbFields.SOURCE.value}, deleted)
+                    PRIMARY KEY({Source_unit_id}, {Source}, deleted)
                 )
             """)
         except Error as e:
@@ -135,21 +142,23 @@ class SourceUnit(Cache):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
-                existing_record[VectorDbFields.SOURCE_UNIT_ID.value],
-                existing_record[VectorDbFields.SOURCE.value],
+                existing_record[Source],
+                existing_record[Source_unit_id],
                 existing_record['uri'],
                 existing_record['created_by'],
                 existing_record['last_edited_by'],
                 existing_record['last_edited_timestamp'],
                 existing_record['last_embedded_timestamp'],
-                existing_record[VectorDbFields.CATEGORY.value],
-                existing_record[VectorDbFields.SCOPE.value],
+                existing_record[Category],
+                existing_record[Scope],
                 existing_record['summary'],
                 pickle.dumps(existing_record['segments']),
                 json.dumps(existing_record['metadata'], sort_keys=True),
                 timestamp_str(datetime.now(utc)),
             ))
-            self.conn.execute("DELETE FROM source_unit WHERE source_unit_id = ? AND source = ?",
+            self.conn.execute("DELETE FROM source_unit WHERE "
+                              f"{Source} = ? AND "
+                              f"{Source_unit_id} = ?",
                               (source_unit_id, source))
             self.conn.commit()
 
@@ -164,41 +173,44 @@ class SourceUnit(Cache):
             last_embedded_timestamp: datetime = None,
             **vector_db_fields):
 
-        existing_record = self.get(vector_db_fields[VectorDbFields.SOURCE.value],
-                                   vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+        existing_record = self.get(vector_db_fields[Source],
+                                   vector_db_fields[Source_unit_id])
         if existing_record:
-            self.delete(vector_db_fields[VectorDbFields.SOURCE.value],
-                        vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+            self.delete(vector_db_fields[Source],
+                        vector_db_fields[Source_unit_id])
 
         query = """
             INSERT OR REPLACE INTO source_unit
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        self.conn.execute(query, (vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value],
-                                  vector_db_fields[VectorDbFields.SOURCE.value],
+        self.conn.execute(query, (vector_db_fields[Source],
+                                  vector_db_fields[Source_unit_id],
                                   T.validate_uri(uri),
                                   created_by,
                                   last_edited_by,
                                   timestamp_str(last_edited_timestamp),
                                   timestamp_str(last_embedded_timestamp),
-                                  vector_db_fields.get(VectorDbFields.CATEGORY.value, ''),
-                                  vector_db_fields.get(VectorDbFields.SCOPE.value, ''),
+                                  vector_db_fields.get(Category, ''),
+                                  vector_db_fields.get(Scope, ''),
                                   summary,
                                   pickle.dumps(segments),
                                   json.dumps(metadata, sort_keys=True)))
         self.conn.commit()
-        return vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value]
+        return vector_db_fields[Source_unit_id]
 
     def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE source_unit_id=? AND source=?",
-                       (source_unit_id, source))
+        cursor.execute("SELECT * FROM source_unit WHERE "
+                       f"{Source}=? AND "
+                       f"{Source_unit_id}=?",
+                       (source, source_unit_id))
         out = timestamps_to_datetimes(cursor.fetchone())
         return out
 
     def get_by_uri(self, source: str, uri: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE uri=? AND source=?", (uri, source))
+        cursor.execute("SELECT * FROM source_unit WHERE uri=? AND "
+                       f"{Source}=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
     def get_unembedded(self) -> List[Dict[str, Any]]:
@@ -270,15 +282,74 @@ class SourceUnit(Cache):
         # Group by source_unit_id and source, taking only the first (latest) record for each group
         grouped_records = []
         for _, group in groupby(historical_records,
-                                key=lambda row: (row[VectorDbFields.SOURCE_UNIT_ID.value],
-                                                 row[VectorDbFields.SOURCE.value])):
+                                key=lambda row: (row[Source_unit_id],
+                                                 row[Source])):
             grouped_records.append(next(group))
 
         # Step 3
-        all_records = {(row[VectorDbFields.SOURCE_UNIT_ID.value],
-                        row[VectorDbFields.SOURCE.value]): row for row in current_records}
-        all_records.update({(row[VectorDbFields.SOURCE_UNIT_ID.value],
-                             row[VectorDbFields.SOURCE.value]): row
+        all_records = {(row[Source_unit_id],
+                        row[Source]): row for row in current_records}
+        all_records.update({(row[Source_unit_id],
+                             row[Source]): row
                             for row in grouped_records})
 
         return list(all_records.values())
+
+
+class ChunkDB:
+    def __init__(self, model_name, in_memory=False):
+        self.conn = get_connection(in_memory)
+        self.table_name = 'chunk_' + model_name.replace('-', '_')
+
+        self.create_table()
+        self.in_memory = in_memory
+
+    def create_table(self):
+        try:
+            self.conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self.table_name} (
+                    chunk_id TEXT,
+                    {Source} TEXT,
+                    {Source_unit_id} TEXT,
+                    text TEXT,
+                    vector BLOB,
+                    vector_db_id TEXT,
+                    PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
+                    FOREIGN KEY({Source}, {Source_unit_id}) REFERENCES source_unit({Source}, {Source_unit_id})
+                )
+            """)
+            self.conn.execute(f"""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
+                ON {self.table_name} (chunk_id)
+            """)
+        except sqlite3.Error as e:
+            print(e)
+
+    def add(self, source: str, source_unit_id: str, chunks: List[Chunk]):
+        try:
+            self.conn.executemany(f"""
+                INSERT OR REPLACE INTO {self.table_name}
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, [(str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
+                   source,
+                   source_unit_id,
+                   chunk.text,
+                   json.dumps(chunk.vector),
+                   chunk.vector_db_id)
+                  for chunk in chunks])
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(e)
+
+    def get(self, chunk_id: str) -> Optional[Chunk]:
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {self.table_name} WHERE chunk_id=?", (chunk_id,))
+        row = cursor.fetchone()
+        return Chunk(row['text'], json.loads(row['vector']), row['vector_db_id']) if row else None
+
+    def get_by_source_unit(self, source: str, source_unit_id: str) -> List[Chunk]:
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=? AND source_unit_id=?",
+                       (source, source_unit_id))
+        rows = cursor.fetchall()
+        return [Chunk(row['text'], json.loads(row['vector']), row['vector_db_id']) for row in rows]
