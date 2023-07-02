@@ -86,17 +86,18 @@ def test_get_unembedded():
     su.add(uri='file://test_uri',
            created_by='test_creator',
            last_edited_by='editor',
-           last_edited_timestamp=datetime.now(utc),
+           last_edited_timestamp=datetime.now(utc) - relativedelta(hours=2),
            added_timestamp=datetime.now(utc) - relativedelta(days=1),
            summary='test_summary 3',
            segments=[], **vector_db_fields)
 
     last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc) - relativedelta(days=2)
     results = su.get_unembedded(last_embedded_timestamp)
-
     assert len(results) == 2
-    for result in results:
-        assert result['added_timestamp'] < result['last_edited_timestamp']
+
+    last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc)
+    results = su.get_unembedded(last_embedded_timestamp)
+    assert len(results) == 0
 
 
 def test_update_and_history():
@@ -220,12 +221,16 @@ def test_chunk_add_and_get():
     chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
     chunks = [Chunk(text, vector, vector_db_id)]
 
-    db.add(source, source_unit_id, chunks)
+    now = datetime.now(utc)
+    db.add(source, source_unit_id, chunks, now)
 
     result = db.get(chunk_id)
     assert result.text == text
     assert result.vector == vector
     assert result.vector_db_id == vector_db_id
+
+    most_recent_datetime = db.get_most_recent_addition_datetime()
+    assert most_recent_datetime == now
 
 
 def test_get_non_existent():

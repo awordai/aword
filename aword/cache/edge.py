@@ -311,6 +311,7 @@ class ChunkDB:
                     text TEXT,
                     vector BLOB,
                     vector_db_id TEXT,
+                    added_timestamp TIMESTAMP,
                     PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
                     FOREIGN KEY({Source}, {Source_unit_id}) REFERENCES source_unit({Source}, {Source_unit_id})
                 )
@@ -322,21 +323,37 @@ class ChunkDB:
         except sqlite3.Error as e:
             print(e)
 
-    def add(self, source: str, source_unit_id: str, chunks: List[Chunk]):
+    def add(self, source: str, source_unit_id: str, chunks: List[Chunk], now=None):
         try:
             self.conn.executemany(f"""
                 INSERT OR REPLACE INTO {self.table_name}
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, [(str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
                    source,
                    source_unit_id,
                    chunk.text,
                    json.dumps(chunk.vector),
-                   chunk.vector_db_id)
+                   chunk.vector_db_id,
+                   timestamp_str(now or datetime.now(utc)))
                   for chunk in chunks])
             self.conn.commit()
         except sqlite3.Error as e:
             print(e)
+
+    def get_most_recent_addition_datetime(self) -> Optional[Chunk]:
+        """We can use this as the timestamp for
+        SourceUnitDB.get_unembedded.  It enables quick selection of
+        all the unembedded source units for any given model.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {self.table_name} ORDER BY added_timestamp DESC LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        return T.timestamp_as_utc(
+            row['added_timestamp'] + ('+00:00' if '+' not in row['added_timestamp']
+                                      else ''))
 
     def get(self, chunk_id: str) -> Optional[Chunk]:
         cursor = self.conn.cursor()
