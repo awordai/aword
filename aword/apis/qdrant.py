@@ -1,23 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import os
-from enum import Enum
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 
 import aword.tools as T
+from aword.vdbfields import VectorDbFields
 
 
 QClient = None
-
-
-class VectorDbFields(Enum):
-    SOURCE = 'source'
-    SOURCE_UNIT_ID = 'source_unit_id'
-    CATEGORY = 'category'
-    SCOPE = 'scope'
 
 
 def get_qdrant_client():

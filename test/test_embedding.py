@@ -3,7 +3,7 @@
 import aword.embed as E
 import aword.tools as T
 from aword.apis import qdrant
-from aword.payload import Segment
+from aword.segment import Segment
 from aword.apis.oai import get_embeddings
 
 
