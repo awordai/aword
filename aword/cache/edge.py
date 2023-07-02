@@ -353,3 +353,14 @@ class ChunkDB:
                        (source, source_unit_id))
         rows = cursor.fetchall()
         return [Chunk(row['text'], json.loads(row['vector']), row['vector_db_id']) for row in rows]
+
+    def reset_vector_db_id_by_source_unit(self, source: str, source_unit_id: str):
+        try:
+            self.conn.execute(f"""
+                UPDATE {self.table_name}
+                SET vector_db_id = NULL
+                WHERE source = ? AND source_unit_id = ?
+            """, (source, source_unit_id))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(e)
