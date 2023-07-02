@@ -7,9 +7,11 @@ from typing import Dict, List, Callable, Tuple
 import requests
 
 import aword.tools as T
-from aword.payload import Segment
+from aword.segment import Segment
 from aword.embed import embed_source_unit
-from aword.sources.state import State
+from aword.vdbfields import VectorDbFields
+from aword.cache import Cache
+
 
 SourceName = 'notion'
 Timeout = 30
@@ -231,10 +233,6 @@ def ingest_page(title: str,
                                             fetch_user_data(block_last_edited_by_id))
                     segments.append(
                         Segment(body=text_so_far,
-                                source=SourceName,
-                                source_unit_id=source_unit_id,
-                                category=category,
-                                scope=scope,
                                 uri=url + (('#' + current_heading_id)
                                            if current_heading_id else ''),
                                 # Extract heading texts from the stack
@@ -266,7 +264,7 @@ def ingest_page(title: str,
 
 def process_page(page_id: str,
                  ingesting_function: Callable,
-                 state: State,
+                 cache: Cache,
                  category: str = '',
                  scope: str = '',
                  recurse_subpages: bool = False,
@@ -292,7 +290,7 @@ def process_page(page_id: str,
     last_edited_tm = T.timestamp_as_utc(page.get(
         'last_edited_time', page['created_time']))
 
-    last_seen_dt = state.get_last_seen(SourceName, short_page_id)
+    last_seen_dt = cache.get_last_seen(SourceName, short_page_id)
 
     if (last_seen_dt is None) or (last_edited_tm > last_seen_dt):
         created_by, last_edited_by, last_edited_by_id = fetch_page_authors(page)
@@ -306,7 +304,7 @@ def process_page(page_id: str,
                                content=page_content,
                                category=category,
                                scope=scope)
-            state.update_last_seen(SourceName, short_page_id)
+            cache.update_last_seen(SourceName, short_page_id)
         except:
             print('Failed ingesting page', page_id)
             if Testing:
@@ -327,7 +325,7 @@ def process_page(page_id: str,
                              sleeping=sleeping)
 
 
-def ingest(sleeping: int = 0.5):
+def ingest(cache: Cache, sleeping: int = 0.5):
     sources = T.get_source_config(SourceName)
 
     page_id_categories_scopes = []
@@ -346,11 +344,10 @@ def ingest(sleeping: int = 0.5):
                                           page.get('scope', '')))
 
     time.sleep(sleeping)
-    state = State()
     for (page_id, category, scope) in page_id_categories_scopes:
         process_page(page_id,
                      ingesting_function=ingest_page,
-                     state=state,
+                     cache=cache,
                      category=category,
                      scope=scope,
                      recurse_subpages=True,
@@ -358,4 +355,5 @@ def ingest(sleeping: int = 0.5):
 
 
 if __name__ == "__main__":
-    ingest()
+    from aword.cache.edge import SourceUnit
+    ingest(SourceUnit())

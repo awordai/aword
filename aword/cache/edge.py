@@ -3,18 +3,23 @@
 import datetime
 import pickle
 import json
+from itertools import groupby
+
 import sqlite3
 from sqlite3 import Error
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
+from pytz import utc
+
 import aword.tools as T
 from aword.vdbfields import VectorDbFields
 from aword.segment import Segment
-from aword.chunk import Chunk
+from aword.cache import Cache
 
 
 DbConnection = None
+
 
 def get_connection(in_memory=False):
     global DbConnection
@@ -43,10 +48,13 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
     if row is not None:
         out = dict(row)
         out['last_edited_timestamp'] = T.timestamp_as_utc(
-            out['last_edited_timestamp'] + '+00:00')
+            out['last_edited_timestamp'] + ('+00:00' if '+' not in out['last_edited_timestamp']
+                                            else ''))
         if out['last_embedded_timestamp']:
             out['last_embedded_timestamp'] = T.timestamp_as_utc(
-                out['last_embedded_timestamp'] + '+00:00')
+                out['last_embedded_timestamp'] + (
+                    '+00:00' if '+' not in out['last_embedded_timestamp']
+                    else ''))
         else:
             out['last_embedded_timestamp'] = None
         out['metadata'] = json.loads(out['metadata']) or {}
@@ -55,16 +63,18 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
     return None
 
 
-class SourceUnit:
+class SourceUnit(Cache):
     def __init__(self, in_memory=False):
         self.conn = get_connection(in_memory)
         self.create_table()
+        self.create_history_table()
+        self.in_memory = in_memory
 
     def create_table(self):
         try:
             self.conn.execute(f"""
                 CREATE TABLE source_unit (
-                    {VectorDbFields.SOURCE_UNIT_ID.value} TEXT PRIMARY KEY,
+                    {VectorDbFields.SOURCE_UNIT_ID.value} TEXT,
                     {VectorDbFields.SOURCE.value} TEXT,
                     uri TEXT,
                     created_by TEXT,
@@ -75,11 +85,73 @@ class SourceUnit:
                     {VectorDbFields.SCOPE.value} TEXT,
                     summary TEXT,
                     segments BLOB,
-                    metadata TEXT
+                    metadata TEXT,
+                    PRIMARY KEY({VectorDbFields.SOURCE_UNIT_ID.value}, {VectorDbFields.SOURCE.value})
                 )
             """)
         except Error as e:
             print(e)
+
+    def reset_tables(self, only_in_memory=True):
+        if not self.in_memory and only_in_memory:
+            print('Refusing to drop persistent tables without `only_in_memory` argument')
+            return
+        try:
+            self.conn.execute("DROP TABLE IF EXISTS source_unit")
+            self.conn.execute("DROP TABLE IF EXISTS source_unit_history")
+            self.create_table()
+            self.create_history_table()
+        except Error as e:
+            print(e)
+
+    def create_history_table(self):
+        try:
+            self.conn.execute(f"""
+                CREATE TABLE source_unit_history (
+                    {VectorDbFields.SOURCE_UNIT_ID.value} TEXT,
+                    {VectorDbFields.SOURCE.value} TEXT,
+                    uri TEXT,
+                    created_by TEXT,
+                    last_edited_by TEXT,
+                    last_edited_timestamp TIMESTAMP,
+                    last_embedded_timestamp TIMESTAMP,
+                    {VectorDbFields.CATEGORY.value} TEXT,
+                    {VectorDbFields.SCOPE.value} TEXT,
+                    summary TEXT,
+                    segments BLOB,
+                    metadata TEXT,
+                    deleted TIMESTAMP,
+                    PRIMARY KEY({VectorDbFields.SOURCE_UNIT_ID.value}, {VectorDbFields.SOURCE.value}, deleted)
+                )
+            """)
+        except Error as e:
+            print(e)
+
+    def delete(self, source: str, source_unit_id: str):
+        existing_record = self.get(source, source_unit_id)
+        if existing_record:
+            query = """
+                INSERT INTO source_unit_history
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            self.conn.execute(query, (
+                existing_record[VectorDbFields.SOURCE_UNIT_ID.value],
+                existing_record[VectorDbFields.SOURCE.value],
+                existing_record['uri'],
+                existing_record['created_by'],
+                existing_record['last_edited_by'],
+                existing_record['last_edited_timestamp'],
+                existing_record['last_embedded_timestamp'],
+                existing_record[VectorDbFields.CATEGORY.value],
+                existing_record[VectorDbFields.SCOPE.value],
+                existing_record['summary'],
+                pickle.dumps(existing_record['segments']),
+                json.dumps(existing_record['metadata'], sort_keys=True),
+                timestamp_str(datetime.now(utc)),
+            ))
+            self.conn.execute("DELETE FROM source_unit WHERE source_unit_id = ? AND source = ?",
+                              (source_unit_id, source))
+            self.conn.commit()
 
     def add(self,
             uri: str,
@@ -92,7 +164,11 @@ class SourceUnit:
             last_embedded_timestamp: datetime = None,
             **vector_db_fields):
 
-        metadata_str = json.dumps(metadata, sort_keys=True)
+        existing_record = self.get(vector_db_fields[VectorDbFields.SOURCE.value],
+                                   vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+        if existing_record:
+            self.delete(vector_db_fields[VectorDbFields.SOURCE.value],
+                        vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
 
         query = """
             INSERT OR REPLACE INTO source_unit
@@ -109,21 +185,20 @@ class SourceUnit:
                                   vector_db_fields.get(VectorDbFields.SCOPE.value, ''),
                                   summary,
                                   pickle.dumps(segments),
-                                  metadata_str))
+                                  json.dumps(metadata, sort_keys=True)))
         self.conn.commit()
         return vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value]
 
-    def get(self, source_unit_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE source_unit_id=?",
-                       (source_unit_id,))
+        cursor.execute("SELECT * FROM source_unit WHERE source_unit_id=? AND source=?",
+                       (source_unit_id, source))
         out = timestamps_to_datetimes(cursor.fetchone())
         return out
 
-
-    def get_by_uri(self, uri: str) -> Optional[Dict[str, Any]]:
+    def get_by_uri(self, source: str, uri: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE uri=?", (uri,))
+        cursor.execute("SELECT * FROM source_unit WHERE uri=? AND source=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
     def get_unembedded(self) -> List[Dict[str, Any]]:
@@ -135,3 +210,75 @@ class SourceUnit:
 
         rows = cursor.fetchall()
         return [timestamps_to_datetimes(row) for row in rows]
+
+    def get_last_edited(self, source: str, source_unit_id: str) -> Optional[datetime]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT last_edited_timestamp
+            FROM source_unit
+            WHERE source_unit_id = ? AND source = ?
+            """, (source_unit_id, source))
+
+        row = cursor.fetchone()
+        if row is not None:
+            return T.timestamp_as_utc(row['last_edited_timestamp'] + '+00:00')
+        return None
+
+    def get_history(self, source: str, source_unit_id: str) -> List[Dict[str, Any]]:
+        """Returns the history of a source unit.
+
+        Args:
+            source: The source of the source unit.
+            source_unit_id: The ID of the source unit.
+
+        Returns:
+            A list of dictionaries representing the history of the source unit.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM source_unit_history
+            WHERE source = ? AND source_unit_id = ?
+            ORDER BY last_edited_timestamp DESC
+        """, (source, source_unit_id))
+
+        rows = cursor.fetchall()
+
+        # Convert rows to dictionaries and convert timestamps to datetimes
+        return [timestamps_to_datetimes(dict(row)) for row in rows]
+
+    def get_state_at_date(self, date: datetime) -> List[Dict[str, Any]]:
+        date_str = timestamp_str(date)
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM source_unit
+            WHERE last_edited_timestamp <= ?
+        """, (date_str,))
+        current_records = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT * FROM source_unit_history
+            WHERE last_edited_timestamp <= ? AND deleted > ?
+            ORDER BY source_unit_id, source, deleted DESC
+        """, (date_str, date_str))
+        historical_records = cursor.fetchall()
+
+        # Convert records from sqlite3.Row to dictionary
+        current_records = [timestamps_to_datetimes(row) for row in current_records]
+        historical_records = [timestamps_to_datetimes(row) for row in historical_records]
+
+        # Group by source_unit_id and source, taking only the first (latest) record for each group
+        grouped_records = []
+        for _, group in groupby(historical_records,
+                                key=lambda row: (row[VectorDbFields.SOURCE_UNIT_ID.value],
+                                                 row[VectorDbFields.SOURCE.value])):
+            grouped_records.append(next(group))
+
+        # Step 3
+        all_records = {(row[VectorDbFields.SOURCE_UNIT_ID.value],
+                        row[VectorDbFields.SOURCE.value]): row for row in current_records}
+        all_records.update({(row[VectorDbFields.SOURCE_UNIT_ID.value],
+                             row[VectorDbFields.SOURCE.value]): row
+                            for row in grouped_records})
+
+        return list(all_records.values())

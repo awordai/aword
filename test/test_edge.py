@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
+from pytz import utc
 from dateutil.relativedelta import relativedelta
 
 import aword.cache.edge as E
@@ -22,12 +23,13 @@ def test_add_and_get():
     su.add(uri='file://test_uri',
            created_by='test_creator',
            last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(),
+           last_edited_timestamp=datetime.now(utc),
            summary='test_summary',
            segments=segments,
            **vector_db_fields)
 
-    result = su.get(vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+    result = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
+                    vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
 
     assert result['source_unit_id'] == vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value]
     assert result['source'] == vector_db_fields[VectorDbFields.SOURCE.value]
@@ -61,11 +63,12 @@ def test_get_by_uri():
     su.add(uri='file://test_uri',
            created_by='test_creator',
            last_edited_by=editor_2,
-           last_edited_timestamp=datetime.now(),
+           last_edited_timestamp=datetime.now(utc),
            summary='test_summary 2',
            segments=[], **vector_db_fields)
 
-    result = su.get_by_uri('file://test_uri')
+    result = su.get_by_uri(vector_db_fields[VectorDbFields.SOURCE.value],
+                           'file://test_uri')
 
     assert result['source_unit_id'] == vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value]
     assert result['source'] == vector_db_fields[VectorDbFields.SOURCE.value]
@@ -81,8 +84,8 @@ def test_get_unembedded():
     su.add(uri='file://test_uri',
            created_by='test_creator',
            last_edited_by='editor',
-           last_edited_timestamp=datetime.now(),
-           last_embedded_timestamp=datetime.now() - relativedelta(days=1),
+           last_edited_timestamp=datetime.now(utc),
+           last_embedded_timestamp=datetime.now(utc) - relativedelta(days=1),
            summary='test_summary 3',
            segments=[], **vector_db_fields)
 
@@ -92,3 +95,114 @@ def test_get_unembedded():
     for result in results:
         assert (result['last_embedded_timestamp'] is None or
                 result['last_embedded_timestamp'] < result['last_edited_timestamp'])
+
+
+def test_update_and_history():
+    su = E.SourceUnit(in_memory=True)
+    vector_db_fields = {
+        VectorDbFields.SOURCE.value: 'test_source',
+        VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
+    }
+
+    summary_to_modify = 'test_summary to modify'
+    su.add(uri='file://test_uri',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=datetime.now(utc) - relativedelta(seconds=10),
+           summary=summary_to_modify,
+           segments=[],
+           **vector_db_fields)
+
+    result_before_update = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
+                                  vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+
+    summary_modified = 'test_summary modified'
+    su.add(uri='file://test_uri_updated',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=datetime.now(utc),
+           summary=summary_modified,
+           segments=[],
+           **vector_db_fields)
+
+    result_after_update = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
+                                 vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+
+    assert result_before_update != result_after_update
+    assert result_after_update['summary'] == summary_modified
+
+    history = su.get_history(vector_db_fields[VectorDbFields.SOURCE.value],
+                             vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
+    assert history[-1]['summary'] == summary_to_modify
+
+
+def test_different_sources():
+    su = E.SourceUnit(in_memory=True)
+    vector_db_fields_source_1 = {
+        VectorDbFields.SOURCE.value: 'test_source_1',
+        VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
+    }
+    vector_db_fields_source_2 = {
+        VectorDbFields.SOURCE.value: 'test_source_2',
+        VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
+    }
+
+    su.add(uri='file://test_uri',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=datetime.now(utc),
+           summary='test_summary',
+           segments=[],
+           **vector_db_fields_source_1)
+
+    su.add(uri='file://test_uri',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=datetime.now(utc),
+           summary='test_summary',
+           segments=[],
+           **vector_db_fields_source_2)
+
+    result_source_1 = su.get(vector_db_fields_source_1[VectorDbFields.SOURCE.value],
+                             vector_db_fields_source_1[VectorDbFields.SOURCE_UNIT_ID.value])
+
+    result_source_2 = su.get(vector_db_fields_source_2[VectorDbFields.SOURCE.value],
+                             vector_db_fields_source_2[VectorDbFields.SOURCE_UNIT_ID.value])
+
+    assert result_source_1 != result_source_2
+
+
+def test_recreate_state():
+    su = E.SourceUnit(in_memory=True)
+    su.reset_tables()
+    vector_db_fields = {
+        VectorDbFields.SOURCE.value: 'test_source',
+        VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
+    }
+
+    timestamp_1 = datetime.now(utc) - relativedelta(seconds=10)
+    timestamp_2 = timestamp_1
+
+    su.add(uri='file://test_uri_1',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=timestamp_1,
+           summary='test_summary',
+           segments=[],
+           **vector_db_fields)
+
+    su.add(uri='file://test_uri_2',
+           created_by='test_creator',
+           last_edited_by='test_editor',
+           last_edited_timestamp=timestamp_2,
+           summary='test_summary',
+           segments=[],
+           **vector_db_fields)
+
+    state_at_timestamp_1 = su.get_state_at_date(timestamp_1 + relativedelta(seconds=1))
+    assert len(state_at_timestamp_1) == 1
+    assert state_at_timestamp_1[0]['uri'] == 'file://test_uri_1'
+
+    state_at_timestamp_2 = su.get_state_at_date(timestamp_2)
+    assert len(state_at_timestamp_2) == 1
+    assert state_at_timestamp_2[0]['uri'] == 'file://test_uri_2'
