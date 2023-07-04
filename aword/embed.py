@@ -2,23 +2,29 @@
 
 import re
 import uuid
+from typing import Callable, Optional, Dict, Any, List
 
 from qdrant_client.models import PointStruct
-
-import tiktoken
 
 from numpy import array, average
 
 import aword.tools as T
-from aword.payload import Chunk, Segment
+from aword.chunk import Chunk
+from aword.segment import Segment
 from aword.apis.oai import get_embeddings
 from aword.apis import qdrant
 
 
-# Split a text into smaller chunks of size n, preferably ending at the
-# end of a paragraph or, if no end of paragraph is found, a sentence.
-def split_in_chunks(text, n, tokenizer):
-    """Yield successive n-sized chunks from text."""
+
+def split_in_chunks(text: str,
+                    n: int,
+                    tokenizer: Callable[[List[str]], List[str]]) -> str:
+    """Split a text into smaller chunks of size n, preferably ending at the
+    end of a paragraph or, if no end of paragraph is found, a sentence.
+
+    Yield successive n-sized chunks from text."""
+
+    #! tokenizer is an object with an encode and a decode
     tokens = tokenizer.encode(re.sub(r'[ \t]+', ' ', text))
     i = 0
     while i < len(tokens):
@@ -48,7 +54,7 @@ def split_in_chunks(text, n, tokenizer):
         i = j
 
 
-def get_col_average_from_list_of_lists(list_of_lists):
+def get_col_average_from_list_of_lists(list_of_lists: List[List]):
     """Return the average of each column in a list of lists."""
     if len(list_of_lists) == 1:
         return list_of_lists[0]
@@ -58,37 +64,40 @@ def get_col_average_from_list_of_lists(list_of_lists):
     return average_embedding.tolist()
 
 
-def create_embeddings(text, include_full_text_if_chunked=False, tokenizer=None):
-    """Returns a list of tuples (text_chunk, vector).  If
-    include_full_text_if_chunked is True it will add an embedding for
-    the full text when it has been chunked.
+def create_embeddings(text: str,
+                      embedder: Callable[[List[str]], List[float]],
+                      tokenizer: Any,
+                      chunk_size: int,
+                      include_full_text_if_chunked: bool =False,
+                      max_chunk_size: int = 8191):
+    """Returns a list of Chunk.  If include_full_text_if_chunked is
+    True it will add an embedding for the full text when it has been
+    chunked.
+
+    - chunk_size: If openai oai_embedding_chunk_size
+
+    - include_full_text_if_chunked: adds a chunk with all the text.
+
+    - max_chunk_size: the maximum size in tokens of a chunk in order
+      to be embeddable.  If openai it is oai_embedding_ctx_length
+
     """
 
-    C = T.get_config('openai')
-    tokenizer = tokenizer or tiktoken.get_encoding(C['oai_embedding_encoding'])
+    assert chunk_size < max_chunk_size
 
     # Should just return the number of tokens and the text chunks
     token_chunks, text_chunks = list(zip(*split_in_chunks(re.sub('\n+','\n', text),
-                                                          C['oai_embedding_chunk_size'],
+                                                          chunk_size,
                                                           tokenizer)))
 
-    # Split text_chunks into shorter arrays of max length 100
-    text_chunks_arrays = [text_chunks[i:i+C['oai_max_texts_to_embed_batch_size']]
-                          for i in range(0, len(text_chunks),
-                                         C['oai_max_texts_to_embed_batch_size'])]
-
-    # Call get_embeddings for each shorter array and combine the results
-    embeddings = []
-    for text_chunks_array in text_chunks_arrays:
-        embeddings += get_embeddings(text_chunks_array)
-
+    embeddings = embedder(text_chunks)
     chunks = [Chunk(text=t,
                     vector=e)
               for t, e in (zip(text_chunks, embeddings))]
 
     if include_full_text_if_chunked and len(chunks) > 1:
         total_tokens = sum(len(chunk) for chunk in token_chunks)
-        if total_tokens >= C['oai_embedding_ctx_length']:
+        if total_tokens >= max_chunk_size:
             average_embedding = get_col_average_from_list_of_lists(embeddings)
         else:
             average_embedding = get_embeddings(['\n\n'.join(text_chunks)])[0]
