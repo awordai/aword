@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from enum import Enum
+
 import aword.tools as T
-from aword.payload import FactType
 from aword.apis import oai, qdrant
 
 
@@ -17,7 +18,7 @@ def format_context(payload_dict):
     for field in ('source', 'created_by', 'edited_by', 'fact_type', 'timestamp'):
         value = payload_dict.get(field, '')
         if value:
-            ctx_list.append(field + ': ' + (value.value if isinstance(value, FactType)
+            ctx_list.append(field + ': ' + (value.value if isinstance(value, Enum)
                                             else str(value)))
 
     headings = payload_dict.get('headings', [])

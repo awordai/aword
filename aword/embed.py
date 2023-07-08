@@ -15,10 +15,9 @@ from aword.apis.oai import get_embeddings
 from aword.apis import qdrant
 
 
-
 def split_in_chunks(text: str,
                     n: int,
-                    tokenizer: Callable[[List[str]], List[str]]) -> str:
+                    tokenizer: Any) -> str:
     """Split a text into smaller chunks of size n, preferably ending at the
     end of a paragraph or, if no end of paragraph is found, a sentence.
 
