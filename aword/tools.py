@@ -2,80 +2,13 @@
 
 import os
 import sys
-import json
 import datetime
-import configparser
 from typing import Dict, List, Union
 
 import urllib
 import urllib.request
 
 from dotenv import load_dotenv
-
-
-SourceConfig = {}
-Config = {}
-
-
-def get_source_config(source_name: str,
-                      default: Union[Dict, List] = None) -> Union[Dict, List]:
-    global SourceConfig
-
-    if not SourceConfig:
-        # Define potential locations for `sources.json`
-        config_locations = [
-            os.path.join(os.path.dirname(__file__), '..', 'sources.json'),  # Repository
-            os.environ.get('AWORD_SOURCES_CONFIG'),  # Environment variable
-            os.path.expanduser('~/.aword/sources.json')  # User's home directory
-        ]
-
-        # Find the first existing configuration file in the list
-        config_path = next((path for path in config_locations
-                            if path and os.path.isfile(path)), None)
-
-        if config_path is None:
-            return default
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            SourceConfig = json.load(f)
-
-    return SourceConfig.get(source_name, default if default is not None else {})
-
-
-def get_config(section: str) -> Dict:
-    if not Config:
-        config = configparser.ConfigParser()
-
-        # Define potential locations for `config.ini`
-        config_locations = [
-            os.path.join(os.path.dirname(__file__), '..', 'config.ini'),  # Repository
-            os.environ.get('AWORD_CONFIG'),  # Environment variable
-            os.path.expanduser('~/.aword/config.ini')  # User's home directory
-        ]
-
-        # Find the first existing configuration file in the list
-        config_path = next((path for path in config_locations
-                            if path and os.path.isfile(path)), None)
-
-        if config_path is None:
-            raise FileNotFoundError('No configuration file found.')
-
-        config.read(config_path)
-
-        for s in config.sections():
-            Config[s] = dict(config[s])
-
-            # Attempt to convert numeric values to integers or floats
-            for key, value in Config[s].items():
-                try:
-                    if '.' in value:
-                        Config[s][key] = float(value)
-                    else:
-                        Config[s][key] = int(value)
-                except ValueError:
-                    pass
-
-    return Config.get(section, {})
 
 
 def load_environment():

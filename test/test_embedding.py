@@ -1,45 +1,39 @@
 # -*- coding: utf-8 -*-
 
-import aword.embed as E
-import aword.tools as T
-from aword.apis import qdrant
-from aword.segment import Segment
-from aword.apis.oai import get_embeddings
 
-
-def test_get_embeddings():
-    embeddings = get_embeddings(['hola que tal',
-                                 'como estas'])
+def test_get_oai_embeddings(awd):
+    embedder = awd.get_embedder('text-embedding-ada-002')
+    embeddings = embedder.get_embeddings(['hola que tal',
+                                          'como estas'])
     assert len(embeddings) == 2
 
 
-def test_chunks(tokenizer):
+def test_get_hf_embeddings(awd):
+    embedder = awd.get_embedder('multi-qa-mpnet-base-dot-v1')
+    embeddings = embedder.get_embeddings(['hola que tal',
+                                          'como estas'])
+    assert len(embeddings) == 2
 
-    tk, txt = list(zip(*E.split_in_chunks('hola que tal. Esto es una prueba de chunk',
-                                          4, tokenizer)))
+
+def test_chunks(awd):
+    embedder = awd.get_embedder()
+    tk, txt = list(zip(*embedder.split_in_chunks('hola que tal. Esto es una prueba de chunk',
+                                                 4)))
     assert txt[0] == 'hola que tal.'
-    assert tokenizer.encode(txt[0]) == tk[0]
-    assert tokenizer.encode(txt[-1]) == tk[-1]
+    assert embedder.encode(txt[0]) == tk[0]
+    assert embedder.encode(txt[-1]) == tk[-1]
 
 
-def test_embed():
-    q_client = qdrant.get_qdrant_client()
-    config = T.get_config('qdrant')
+def test_oai_embedded_chunks(awd):
+    resdir = 'test/res'
 
-    q_client.delete_collection(collection_name=config['qdrant_collection'])
-    qdrant.create_collection()
-
-    with open('res/test/local/org/wands.org', encoding='utf-8') as wands_in:
-        with open('res/test/local/org/trees.org', encoding='utf-8') as trees_in:
+    with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
+        with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:
             txt = wands_in.read() + trees_in.read()
-            # txt = trees_in.read()
-            segment = Segment(txt,
-                              uri='file://uri_to_file_path',
-                              headings=['Wands', 'Wand composition'])
+            oai_embedder = awd.get_embedder('text-embedding-ada-002')
+            oai_chunks = oai_embedder.get_embedded_chunks(txt)
 
-            segments = E.embed_source_unit([segment], source_unit_id='1')
-
-            assert segments[0].chunks[1].text == (
+            assert oai_chunks[1].text == (
                 'Pine trees are evergreen, coniferous resinous trees in the genus '
                 'Pinus. They are known for their distinctive pine cones and are '
                 'often associated with Christmas.\n'
@@ -57,16 +51,29 @@ def test_embed():
                 'roots. The leaves are typically elongated, but may also be round to '
                 'oval.\n'
             )
+            assert len(oai_chunks[1].vector) == 1536
 
-            assert qdrant.count() == 2
 
-            # If we embed again the same source_unit_id it should first delete the
-            # previous version
-            E.embed_source_unit([segment], source_unit_id='1')
-            assert qdrant.count() == 2
+def test_hf_embedded_chunks(awd):
+    resdir = 'test/res'
 
-            # But if we embed it with a different source_unit_id it should make new
-            # points
-            segments = E.embed_source_unit([segment], source_unit_id='2')
-            assert len(segments[0].chunks) == 2
-            assert qdrant.count() == 4
+    with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
+        with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:
+            txt = wands_in.read() + trees_in.read()
+            embedder = awd.get_embedder('multi-qa-mpnet-base-dot-v1')
+            chunks = embedder.get_embedded_chunks(txt)
+
+            assert chunks[1].text == (
+                '* * pine tree * * * overview pine trees are evergreen, coniferous resinous '
+                'trees in the genus pinus. they are known for their distinctive pine cones '
+                'and are often associated with christmas. * * * characteristics pine trees '
+                'can be identified by their needle - like leaves, which are bundled in '
+                'clusters of 2 - 5. the bark of most pines is thick and scaly, but some species '
+                'have thin, flaky bark. * * willow tree * * * overview willow trees, part of '
+                'the genus salix, are known for their flexibility and their association with '
+                'water and wetlands. * * * characteristics willow trees are usually fast - '
+                'growing but relatively short - lived. they have slender branches and large, '
+                'fibrous, often stoloniferous roots. the leaves are typically elongated, '
+                'but may also be round to oval.'
+            )
+            assert len(chunks[1].vector) == 768

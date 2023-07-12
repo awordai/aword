@@ -14,7 +14,7 @@ from datetime import datetime
 from pytz import utc
 
 import aword.tools as T
-from aword.vdbfields import VectorDbFields
+from aword.vector.fields import VectorDbFields
 from aword.segment import Segment
 from aword.chunk import Chunk
 from aword.cache import Cache
@@ -28,12 +28,20 @@ Category = VectorDbFields.CATEGORY.value
 Scope = VectorDbFields.SCOPE.value
 
 
-def get_connection(in_memory=False):
+def make_source_unit_cache(**kw):
+    return SourceUnitDB(fname=kw['db_file'])
+
+
+def make_chunk_cache(**kw):
+    return ChunkDB(model_name=kw['model_name'], fname=kw['db_file'])
+
+
+def get_connection(fname=None):
     global DbConnection
     if DbConnection is None:
         try:
-            DbConnection = sqlite3.connect(':memory:' if in_memory
-                                           else T.get_config('edge')['sqlite_db_file'])
+            DbConnection = sqlite3.connect(':memory:' if fname is None
+                                           else fname)
             DbConnection.row_factory = sqlite3.Row
         except sqlite3.Error as e:
             print(e)
@@ -67,16 +75,16 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
 
 
 class SourceUnitDB(Cache):
-    def __init__(self, in_memory=False):
-        self.conn = get_connection(in_memory)
+    def __init__(self, fname=None):
+        self.conn = get_connection(fname)
         self.create_table()
         self.create_history_table()
-        self.in_memory = in_memory
+        self.fname = fname
 
     def create_table(self):
         try:
             self.conn.execute(f"""
-                CREATE TABLE source_unit (
+                CREATE TABLE IF NOT EXISTS source_unit (
                     {Source} TEXT,
                     {Source_unit_id} TEXT,
                     uri TEXT,
@@ -96,7 +104,7 @@ class SourceUnitDB(Cache):
             print(e)
 
     def reset_tables(self, only_in_memory=True):
-        if not self.in_memory and only_in_memory:
+        if not (self.fname is None and only_in_memory):
             print('Refusing to drop persistent tables without `only_in_memory` argument')
             return
         try:
@@ -110,7 +118,7 @@ class SourceUnitDB(Cache):
     def create_history_table(self):
         try:
             self.conn.execute(f"""
-                CREATE TABLE source_unit_history (
+                CREATE TABLE IF NOT EXISTS source_unit_history (
                     {Source} TEXT,
                     {Source_unit_id} TEXT,
                     uri TEXT,
@@ -220,7 +228,9 @@ class SourceUnitDB(Cache):
         rows = cursor.fetchall()
         return [timestamps_to_datetimes(row) for row in rows]
 
-    def get_last_edited(self, source: str, source_unit_id: str) -> Optional[datetime]:
+    def get_last_edited_timestamp(self,
+                                  source: str,
+                                  source_unit_id: str) -> Optional[datetime]:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT last_edited_timestamp
@@ -294,12 +304,12 @@ class SourceUnitDB(Cache):
 
 
 class ChunkDB:
-    def __init__(self, model_name, in_memory=False):
-        self.conn = get_connection(in_memory)
+    def __init__(self, model_name, fname=None):
+        self.conn = get_connection(fname)
         self.table_name = 'chunk_' + model_name.replace('-', '_')
 
         self.create_table()
-        self.in_memory = in_memory
+        self.fname = fname
 
     def create_table(self):
         try:
@@ -310,6 +320,7 @@ class ChunkDB:
                     {Source_unit_id} TEXT,
                     text TEXT,
                     vector BLOB,
+                    payload TEXT,
                     vector_db_id TEXT,
                     added_timestamp TIMESTAMP,
                     PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
@@ -318,7 +329,7 @@ class ChunkDB:
             """)
             self.conn.execute(f"""
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
-                ON {self.table_name} (chunk_id)
+                ON {self.table_name} ({Source}, {Source_unit_id})
             """)
         except sqlite3.Error as e:
             print(e)
@@ -327,12 +338,13 @@ class ChunkDB:
         try:
             self.conn.executemany(f"""
                 INSERT OR REPLACE INTO {self.table_name}
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, [(str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
                    source,
                    source_unit_id,
                    chunk.text,
-                   json.dumps(chunk.vector),
+                   pickle.dumps(chunk.vector),
+                   json.dumps(chunk.payload or {}),
                    chunk.vector_db_id,
                    timestamp_str(now or datetime.now(utc)))
                   for chunk in chunks])
@@ -340,6 +352,7 @@ class ChunkDB:
         except sqlite3.Error as e:
             print(e)
 
+    # FIXME It should get the source and source_unit_id as well, to enable the get_unembedded
     def get_most_recent_addition_datetime(self) -> Optional[Chunk]:
         """We can use this as the timestamp for
         SourceUnitDB.get_unembedded.  It enables quick selection of
@@ -359,14 +372,23 @@ class ChunkDB:
         cursor = self.conn.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE chunk_id=?", (chunk_id,))
         row = cursor.fetchone()
-        return Chunk(row['text'], json.loads(row['vector']), row['vector_db_id']) if row else None
+        return Chunk(row['text'],
+                     vector=pickle.loads(row['vector']),
+                     payload=json.dumps(row['payload']),
+                     chunk_id=row['chunk_id'],
+                     vector_db_id=row['vector_db_id']) if row else None
 
     def get_by_source_unit(self, source: str, source_unit_id: str) -> List[Chunk]:
         cursor = self.conn.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=? AND source_unit_id=?",
                        (source, source_unit_id))
         rows = cursor.fetchall()
-        return [Chunk(row['text'], json.loads(row['vector']), row['vector_db_id']) for row in rows]
+        return [Chunk(row['text'],
+                      vector=pickle.loads(row['vector']),
+                      payload=json.dumps(row['payload']),
+                      chunk_id=row['chunk_id'],
+                      vector_db_id=row['vector_db_id'])
+                for row in rows]
 
     def reset_vector_db_id_by_source_unit(self, source: str, source_unit_id: str):
         try:

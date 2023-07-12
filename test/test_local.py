@@ -5,7 +5,7 @@ import time
 
 import aword.tools as T
 from aword.apis import qdrant
-from aword.sources.local import ingest
+from aword.source.local import ingest
 
 
 def update_modification_time(directory):

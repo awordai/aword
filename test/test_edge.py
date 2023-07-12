@@ -8,11 +8,11 @@ from dateutil.relativedelta import relativedelta
 import aword.cache.edge as E
 from aword.segment import Segment
 from aword.chunk import Chunk
-from aword.vdbfields import VectorDbFields
+from aword.vector.fields import VectorDbFields
 
 
 def test_add_and_get():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
@@ -55,7 +55,7 @@ def test_add_and_get():
 
 
 def test_get_by_uri():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
@@ -78,7 +78,7 @@ def test_get_by_uri():
 
 
 def test_get_unembedded():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id_3'
@@ -101,7 +101,7 @@ def test_get_unembedded():
 
 
 def test_update_and_history():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
@@ -140,7 +140,7 @@ def test_update_and_history():
 
 
 def test_different_sources():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     vector_db_fields_source_1 = {
         VectorDbFields.SOURCE.value: 'test_source_1',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
@@ -176,7 +176,7 @@ def test_different_sources():
 
 
 def test_recreate_state():
-    su = E.SourceUnitDB(in_memory=True)
+    su = E.SourceUnitDB()
     su.reset_tables()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
@@ -212,19 +212,20 @@ def test_recreate_state():
 
 
 def test_chunk_add_and_get():
-    db = E.ChunkDB('test_model', in_memory=True)
+    db = E.ChunkDB('test_model')
     source = "test_source"
     source_unit_id = "test_source_unit_id"
     text = "test_text"
     vector = [1, 2, 3]
     vector_db_id = "test_vector_db_id"
     chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
-    chunks = [Chunk(text, vector, vector_db_id)]
+    chunks = [Chunk(text, vector=vector, vector_db_id=vector_db_id)]
 
     now = datetime.now(utc)
     db.add(source, source_unit_id, chunks, now)
 
     result = db.get(chunk_id)
+    print(result)
     assert result.text == text
     assert result.vector == vector
     assert result.vector_db_id == vector_db_id
@@ -234,6 +235,6 @@ def test_chunk_add_and_get():
 
 
 def test_get_non_existent():
-    db = E.ChunkDB('test_model', in_memory=True)
+    db = E.ChunkDB('test_model')
     result = db.get("non_existent_chunk_id")
     assert result is None

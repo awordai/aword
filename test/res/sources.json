@@ -12,21 +12,21 @@
       {
         "id": "7c1003c6426146a2ae485e8e3bfe600b",
         "doc": "Notion test pages",
-        "category": "historical",
+        "category": "historical"
       }
     ]
   },
   "local": [
     {
-      "directory": "res/test/local",
+      "directory": "test/res/local",
       "extensions": ["md", "org", "txt"],
       "author": "unknown",
       "category": "historical",
       "scope": "confidential"
     },
     {
-      "directory": "res/test/local/short",
-      "author": "John Doe",
+      "directory": "test/res/local/short",
+      "author": "John Doe"
     }
   ]
 }
