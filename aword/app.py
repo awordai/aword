@@ -129,7 +129,6 @@ class Awd:
 
         return self._source_unit_cache
 
-
     def get_chunk_cache(self, model_name: str = None):
         if model_name is None:
             embedding_config = self.get_config('embedding')

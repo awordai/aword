@@ -3,7 +3,7 @@
 from enum import Enum
 
 import aword.tools as T
-from aword.apis import oai, qdrant
+from aword.apis import oai
 
 
 def format_context(payload_dict):

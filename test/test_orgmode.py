@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import aword.tools as T
-from aword.sources.local import orgmode
+from aword.source.local import orgmode
 
 
-def test_orgmode_parse():
-    file_path = 'res/test/local/org/trees.org'
+def test_orgmode_parse(resdir):
+    file_path = f'{resdir}/local/org/trees.org'
     payloads = orgmode.parse(file_path,
                              uri=T.file_to_uri(file_path),
-                             source='local:hostname',
                              author='Unknown',
-                             fact_type='reference',
                              timestamp=T.timestamp_as_utc().isoformat(),
                              metadata={'testing': True})
 

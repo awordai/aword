@@ -160,15 +160,15 @@ class QdrantStore(Store):
         points = []
         for chunk in chunks:
             payload = chunk.payload.copy()
-            chunk_id = make_id(payload.get(Source, '') + payload.get(Source_unit_id, ''),
-                               chunk.text)
-            points.append(PointStruct(id=chunk_id,
+            vector_db_id = make_id(payload.get(Source, '') + payload.get(Source_unit_id, ''),
+                                   chunk.text)
+            points.append(PointStruct(id=vector_db_id,
                                       vector=chunk.vector,
                                       payload=payload))
 
             out_chunk = chunk.copy()
             out_chunk.payload = payload  # The copy
-            out_chunk.chunk_id = chunk_id
+            out_chunk.vector_db_id = vector_db_id
             out.append(out_chunk)
 
         self.client.upsert(collection_name=self.collection_name,

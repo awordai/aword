@@ -132,7 +132,6 @@ class Embedder:
             chunks.append(Chunk(text=text,
                                 vector=average_embedding,
                                 chunk_id=make_id(text)))
-
         return chunks
 
 

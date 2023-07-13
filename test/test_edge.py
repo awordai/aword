@@ -22,13 +22,13 @@ def test_add_and_get():
     segment_2 = Segment('body2', uri='http://uri2', created_by='creator2')
     segments = [segment_1, segment_2]
 
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(utc),
-           summary='test_summary',
-           segments=segments,
-           **vector_db_fields)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=datetime.now(utc),
+                     summary='test_summary',
+                     segments=segments,
+                     **vector_db_fields)
 
     result = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
                     vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
@@ -62,12 +62,12 @@ def test_get_by_uri():
     }
 
     editor_2 = 'test_editor_2'
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by=editor_2,
-           last_edited_timestamp=datetime.now(utc),
-           summary='test_summary 2',
-           segments=[], **vector_db_fields)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by=editor_2,
+                     last_edited_timestamp=datetime.now(utc),
+                     summary='test_summary 2',
+                     segments=[], **vector_db_fields)
 
     result = su.get_by_uri(vector_db_fields[VectorDbFields.SOURCE.value],
                            'file://test_uri')
@@ -83,13 +83,13 @@ def test_get_unembedded():
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id_3'
     }
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by='editor',
-           last_edited_timestamp=datetime.now(utc) - relativedelta(hours=2),
-           added_timestamp=datetime.now(utc) - relativedelta(days=1),
-           summary='test_summary 3',
-           segments=[], **vector_db_fields)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by='editor',
+                     last_edited_timestamp=datetime.now(utc) - relativedelta(hours=2),
+                     added_timestamp=datetime.now(utc) - relativedelta(days=1),
+                     summary='test_summary 3',
+                     segments=[], **vector_db_fields)
 
     last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc) - relativedelta(days=2)
     results = su.get_unembedded(last_embedded_timestamp)
@@ -108,25 +108,25 @@ def test_update_and_history():
     }
 
     summary_to_modify = 'test_summary to modify'
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(utc) - relativedelta(seconds=10),
-           summary=summary_to_modify,
-           segments=[],
-           **vector_db_fields)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=datetime.now(utc) - relativedelta(seconds=10),
+                     summary=summary_to_modify,
+                     segments=[],
+                     **vector_db_fields)
 
     result_before_update = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
                                   vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
 
     summary_modified = 'test_summary modified'
-    su.add(uri='file://test_uri_updated',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(utc),
-           summary=summary_modified,
-           segments=[],
-           **vector_db_fields)
+    su.add_or_update(uri='file://test_uri_updated',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=datetime.now(utc),
+                     summary=summary_modified,
+                     segments=[],
+                     **vector_db_fields)
 
     result_after_update = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
                                  vector_db_fields[VectorDbFields.SOURCE_UNIT_ID.value])
@@ -150,21 +150,21 @@ def test_different_sources():
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
     }
 
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(utc),
-           summary='test_summary',
-           segments=[],
-           **vector_db_fields_source_1)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=datetime.now(utc),
+                     summary='test_summary',
+                     segments=[],
+                     **vector_db_fields_source_1)
 
-    su.add(uri='file://test_uri',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=datetime.now(utc),
-           summary='test_summary',
-           segments=[],
-           **vector_db_fields_source_2)
+    su.add_or_update(uri='file://test_uri',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=datetime.now(utc),
+                     summary='test_summary',
+                     segments=[],
+                     **vector_db_fields_source_2)
 
     result_source_1 = su.get(vector_db_fields_source_1[VectorDbFields.SOURCE.value],
                              vector_db_fields_source_1[VectorDbFields.SOURCE_UNIT_ID.value])
@@ -186,21 +186,21 @@ def test_recreate_state():
     timestamp_1 = datetime.now(utc) - relativedelta(seconds=10)
     timestamp_2 = timestamp_1
 
-    su.add(uri='file://test_uri_1',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=timestamp_1,
-           summary='test_summary',
-           segments=[],
-           **vector_db_fields)
+    su.add_or_update(uri='file://test_uri_1',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=timestamp_1,
+                     summary='test_summary',
+                     segments=[],
+                     **vector_db_fields)
 
-    su.add(uri='file://test_uri_2',
-           created_by='test_creator',
-           last_edited_by='test_editor',
-           last_edited_timestamp=timestamp_2,
-           summary='test_summary',
-           segments=[],
-           **vector_db_fields)
+    su.add_or_update(uri='file://test_uri_2',
+                     created_by='test_creator',
+                     last_edited_by='test_editor',
+                     last_edited_timestamp=timestamp_2,
+                     summary='test_summary',
+                     segments=[],
+                     **vector_db_fields)
 
     state_at_timestamp_1 = su.get_state_at_date(timestamp_1 + relativedelta(seconds=1))
     assert len(state_at_timestamp_1) == 1
@@ -222,7 +222,7 @@ def test_chunk_add_and_get():
     chunks = [Chunk(text, vector=vector, vector_db_id=vector_db_id)]
 
     now = datetime.now(utc)
-    db.add(source, source_unit_id, chunks, now)
+    db.add_or_update(source, source_unit_id, chunks, now)
 
     result = db.get(chunk_id)
     print(result)

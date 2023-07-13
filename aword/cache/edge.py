@@ -17,7 +17,7 @@ import aword.tools as T
 from aword.vector.fields import VectorDbFields
 from aword.segment import Segment
 from aword.chunk import Chunk
-from aword.cache import Cache
+from aword.cache.cache import Cache
 
 
 DbConnection = None
@@ -29,11 +29,11 @@ Scope = VectorDbFields.SCOPE.value
 
 
 def make_source_unit_cache(**kw):
-    return SourceUnitDB(fname=kw['db_file'])
+    return SourceUnitDB(fname=kw.get('db_file', None))
 
 
 def make_chunk_cache(**kw):
-    return ChunkDB(model_name=kw['model_name'], fname=kw['db_file'])
+    return ChunkDB(model_name=kw['model_name'], fname=kw.get('db_file', None))
 
 
 def get_connection(fname=None):
@@ -82,26 +82,23 @@ class SourceUnitDB(Cache):
         self.fname = fname
 
     def create_table(self):
-        try:
-            self.conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS source_unit (
-                    {Source} TEXT,
-                    {Source_unit_id} TEXT,
-                    uri TEXT,
-                    created_by TEXT,
-                    last_edited_by TEXT,
-                    last_edited_timestamp TIMESTAMP,
-                    added_timestamp TIMESTAMP,
-                    {Category} TEXT,
-                    {Scope} TEXT,
-                    summary TEXT,
-                    segments BLOB,
-                    metadata TEXT,
-                    PRIMARY KEY({Source_unit_id}, {Source})
-                )
-            """)
-        except Error as e:
-            print(e)
+        self.conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS source_unit (
+                {Source} TEXT,
+                {Source_unit_id} TEXT,
+                uri TEXT,
+                created_by TEXT,
+                last_edited_by TEXT,
+                last_edited_timestamp TIMESTAMP,
+                added_timestamp TIMESTAMP,
+                {Category} TEXT,
+                {Scope} TEXT,
+                summary TEXT,
+                segments BLOB,
+                metadata TEXT,
+                PRIMARY KEY({Source_unit_id}, {Source})
+            )
+        """)
 
     def reset_tables(self, only_in_memory=True):
         if not (self.fname is None and only_in_memory):
@@ -116,27 +113,24 @@ class SourceUnitDB(Cache):
             print(e)
 
     def create_history_table(self):
-        try:
-            self.conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS source_unit_history (
-                    {Source} TEXT,
-                    {Source_unit_id} TEXT,
-                    uri TEXT,
-                    created_by TEXT,
-                    last_edited_by TEXT,
-                    last_edited_timestamp TIMESTAMP,
-                    added_timestamp TIMESTAMP,
-                    {Category} TEXT,
-                    {Scope} TEXT,
-                    summary TEXT,
-                    segments BLOB,
-                    metadata TEXT,
-                    deleted TIMESTAMP,
-                    PRIMARY KEY({Source_unit_id}, {Source}, deleted)
-                )
-            """)
-        except Error as e:
-            print(e)
+        self.conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS source_unit_history (
+                {Source} TEXT,
+                {Source_unit_id} TEXT,
+                uri TEXT,
+                created_by TEXT,
+                last_edited_by TEXT,
+                last_edited_timestamp TIMESTAMP,
+                added_timestamp TIMESTAMP,
+                {Category} TEXT,
+                {Scope} TEXT,
+                summary TEXT,
+                segments BLOB,
+                metadata TEXT,
+                deleted TIMESTAMP,
+                PRIMARY KEY({Source_unit_id}, {Source}, deleted)
+            )
+        """)
 
     def delete(self, source: str, source_unit_id: str):
         existing_record = self.get(source, source_unit_id)
@@ -166,22 +160,24 @@ class SourceUnitDB(Cache):
                               (source_unit_id, source))
             self.conn.commit()
 
-    def add(self,
-            uri: str,
-            created_by: str,
-            last_edited_by: str,
-            last_edited_timestamp: datetime,
-            summary: str,
-            segments: List[Segment],
-            metadata: Dict = None,
-            added_timestamp: datetime = None,
-            **vector_db_fields):
+    def add_or_update(self,
+                      uri: str,
+                      created_by: str,
+                      last_edited_by: str,
+                      last_edited_timestamp: datetime,
+                      summary: str,
+                      segments: List[Segment],
+                      metadata: Dict = None,
+                      **vector_db_fields):
 
         existing_record = self.get(vector_db_fields[Source],
                                    vector_db_fields[Source_unit_id])
         if existing_record:
+            added_timestamp = existing_record['added_timestamp']
             self.delete(vector_db_fields[Source],
                         vector_db_fields[Source_unit_id])
+        else:
+            added_timestamp = datetime.now(utc)
 
         query = """
             INSERT OR REPLACE INTO source_unit
@@ -193,7 +189,7 @@ class SourceUnitDB(Cache):
                                   created_by,
                                   last_edited_by,
                                   timestamp_str(last_edited_timestamp),
-                                  timestamp_str(added_timestamp or datetime.now(utc)),
+                                  timestamp_str(added_timestamp),
                                   vector_db_fields.get(Category, ''),
                                   vector_db_fields.get(Scope, ''),
                                   summary,
@@ -312,29 +308,30 @@ class ChunkDB:
         self.fname = fname
 
     def create_table(self):
-        try:
-            self.conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    chunk_id TEXT,
-                    {Source} TEXT,
-                    {Source_unit_id} TEXT,
-                    text TEXT,
-                    vector BLOB,
-                    payload TEXT,
-                    vector_db_id TEXT,
-                    added_timestamp TIMESTAMP,
-                    PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
-                    FOREIGN KEY({Source}, {Source_unit_id}) REFERENCES source_unit({Source}, {Source_unit_id})
-                )
-            """)
-            self.conn.execute(f"""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
-                ON {self.table_name} ({Source}, {Source_unit_id})
-            """)
-        except sqlite3.Error as e:
-            print(e)
+        self.conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {self.table_name} (
+          chunk_id TEXT,
+          {Source} TEXT,
+          {Source_unit_id} TEXT,
+          text TEXT,
+          vector BLOB,
+          payload TEXT,
+          vector_db_id TEXT,
+          added_timestamp TIMESTAMP,
+          PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
+          FOREIGN KEY({Source}, {Source_unit_id}) REFERENCES source_unit({Source}, {Source_unit_id})
+        )
+        """)
+        self.conn.execute(f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
+        ON {self.table_name} ({Source}, {Source_unit_id})
+        """)
 
-    def add(self, source: str, source_unit_id: str, chunks: List[Chunk], now=None):
+    def add_or_update(self,
+                      source: str,
+                      source_unit_id: str,
+                      chunks: List[Chunk],
+                      now=None):
         try:
             self.conn.executemany(f"""
                 INSERT OR REPLACE INTO {self.table_name}

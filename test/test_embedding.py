@@ -24,9 +24,7 @@ def test_chunks(awd):
     assert embedder.encode(txt[-1]) == tk[-1]
 
 
-def test_oai_embedded_chunks(awd):
-    resdir = 'test/res'
-
+def test_oai_embedded_chunks(awd, resdir):
     with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
         with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:
             txt = wands_in.read() + trees_in.read()
@@ -54,9 +52,7 @@ def test_oai_embedded_chunks(awd):
             assert len(oai_chunks[1].vector) == 1536
 
 
-def test_hf_embedded_chunks(awd):
-    resdir = 'test/res'
-
+def test_hf_embedded_chunks(awd, resdir):
     with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
         with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:
             txt = wands_in.read() + trees_in.read()

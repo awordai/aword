@@ -4,15 +4,13 @@
 from aword.segment import Segment
 
 
-def test_store(awd, collection_name):
+def test_store(awd, collection_name, resdir):
     store = awd.get_store(collection_name)
 
     store.client.delete_collection(collection_name)
     awd.create_store_collection(collection_name)
 
     embedder = awd.get_embedder()
-
-    resdir = 'test/res'
 
     with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
         with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:

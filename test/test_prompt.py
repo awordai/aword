@@ -5,8 +5,6 @@ import time
 import socket
 
 import aword.tools as T
-from aword.apis import qdrant, oai
-from aword.sources.local import ingest
 from aword.chat import format_context
 
 
@@ -18,7 +16,7 @@ def update_modification_time(directory):
             os.utime(file_path, (current_time, current_time))
 
 
-def test_prompt():
+def _test_prompt():
     q_client = qdrant.get_qdrant_client()
 
     config = T.get_config('qdrant')

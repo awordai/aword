@@ -8,9 +8,7 @@ import requests
 
 import aword.tools as T
 from aword.segment import Segment
-from aword.embed import embed_source_unit
-from aword.vdbfields import VectorDbFields
-from aword.cache import Cache
+from aword.vector.fields import VectorDbFields
 
 
 SourceName = 'notion'

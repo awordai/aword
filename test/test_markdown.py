@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import aword.tools as T
-from aword.sources.local import markdown
+from aword.source.local import markdown
 
 
-def test_parse():
-    file_path = 'res/test/local/butterfly-biology.md'
+def test_parse(resdir):
+    file_path = f'{resdir}/local/butterfly-biology.md'
     payloads = markdown.parse(file_path,
                               uri=T.file_to_uri(file_path),
-                              source='local:hostname',
                               author='Unknown',
-                              fact_type='reference',
                               timestamp=T.timestamp_as_utc().isoformat(),
                               metadata={'testing': True})
 

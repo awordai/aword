@@ -5,15 +5,12 @@ from datetime import datetime
 from typing import Any, Dict
 
 import aword.tools as T
-from aword.payload import Segment
+from aword.segment import Segment
 
 
 def parse(file_path: str,
           uri: str,
-          source: str,
           author: str,
-          category: str,
-          scope: str,
           timestamp: datetime,
           metadata: Dict[str, Any] = None):
 
@@ -38,10 +35,6 @@ def parse(file_path: str,
                                                            anchors_so_far)
                 segments.append(
                     Segment(body=text_so_far,
-                            source=source,
-                            source_unit_id=uri,
-                            category=category,
-                            scope=scope,
                             uri=uri + anchor,
                             headings=list(current_heading_chain),
                             created_by=author,
@@ -61,10 +54,6 @@ def parse(file_path: str,
 
         segments.append(
             Segment(body=' '.join(current_text).strip(),
-                    source=source,
-                    source_unit_id=uri,
-                    category=category,
-                    scope=scope,
                     uri=uri + anchor,
                     headings=list(current_heading_chain),
                     created_by=author,

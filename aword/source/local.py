@@ -7,9 +7,9 @@ from pytz import utc
 
 import aword.tools as T
 
-# from aword.source import markdown
-# from aword.source import orgmode
-from aword.source import plain
+from aword.source.parser import orgmode
+from aword.source.parser import markdown
+from aword.source.parser import plain
 
 from aword.vector.fields import VectorDbFields
 
@@ -20,19 +20,19 @@ Scope = VectorDbFields.SCOPE.value
 
 
 def add_to_cache(awd, only_in_directory=None):
-    supported_extensions = [# "md", "org",
-                            'txt', 'text']
+    supported_extensions = ['org', 'md', 'txt', 'text']
 
     parsers = {
-        # "md": markdown.parse,
-        # "org": orgmode.parse,
-        "txt": plain.parse,
-        "text": plain.parse,
+        'org': orgmode.parse,
+        'md': markdown.parse,
+        'txt': plain.parse,
+        'text': plain.parse,
     }
 
     all_segments = []
-    source_name = 'local'
     hostname = socket.gethostname()
+    source_name = 'local'
+    full_source_name = hostname + ':' + 'local'
     source_unit_cache = awd.get_source_unit_cache()
 
     # pylint: disable=too-many-nested-blocks
@@ -57,23 +57,22 @@ def add_to_cache(awd, only_in_directory=None):
                         os.path.getmtime(file_path)).replace(tzinfo=utc)
 
                     last_stored_edit_dt = source_unit_cache.get_last_edited_timestamp(
-                        source_name, file_path)
+                        full_source_name, file_path)
 
                     if last_stored_edit_dt is None or file_modified_dt > last_stored_edit_dt:
+                        print('  + parsing', file_path)
                         uri = T.file_to_uri(file_path)
-                        parser = parsers[file_extension]
-                        segments = parser(
+                        parser_fn = parsers[file_extension]
+                        segments = parser_fn(
                             file_path,
                             uri=uri,
-                            # source=source_name + ':' + hostname,
                             author=author,
                             timestamp=file_modified_dt)
+                        all_segments += segments
 
-                        # First see if exists. If it does keep the
-                        # created_by and the added_timestamp
-                        source_unit_cache.add(**{
+                        source_unit_cache.add_or_update(**{
                             'uri': T.file_to_uri(file_path),
-                            Source: hostname + ':' + source_name,
+                            Source: full_source_name,
                             Source_unit_id: file_path,
                             Category: category,
                             Scope: scope,
@@ -84,15 +83,15 @@ def add_to_cache(awd, only_in_directory=None):
                             'segments': segments,
                             'metadata': {'directory': directory}
                         })
-
-                        all_segments += segments
-
+                    else:
+                        print('  - ignoring %s with last_stored_edit_dt %s' %
+                              (file_path, last_stored_edit_dt))
 
     return all_segments
 
 
 def main():
-    from aword.config import Awd
+    from aword.app import Awd
     added = add_to_cache(Awd())
     print('Added to cache:')
     print('  ' + '\n  '.join([e.uri for e in added]))
