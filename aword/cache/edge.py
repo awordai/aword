@@ -55,19 +55,19 @@ def close_connection():
         DbConnection = None
 
 
-def timestamp_str(ts):
-    return T.timestamp_as_utc(ts).strftime('%Y-%m-%d %H:%M:%S.%f') if ts else ''
+def timestamp_str(ts, default=''):
+    return T.timestamp_as_utc(ts).strftime('%Y-%m-%d %H:%M:%S.%f') if ts else default
 
 
 def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
+    def _utc_ts(ts):
+        return T.timestamp_as_utc(ts + ('+00:00' if '+' not in ts else ''))
+
     if row is not None:
         out = dict(row)
-        out['last_edited_timestamp'] = T.timestamp_as_utc(
-            out['last_edited_timestamp'] + ('+00:00' if '+' not in out['last_edited_timestamp']
-                                            else ''))
-        out['added_timestamp'] = T.timestamp_as_utc(
-            out['added_timestamp'] + ('+00:00' if '+' not in out['added_timestamp']
-                                            else ''))
+        out['last_edited_timestamp'] = _utc_ts(out['last_edited_timestamp'])
+        out['added_timestamp'] = _utc_ts(out['added_timestamp'])
+        out['embedded_timestamp'] = _utc_ts(out['embedded_timestamp'])
         out['metadata'] = json.loads(out['metadata']) or {}
         out['segments'] = pickle.loads(out['segments']) or []
         return out
@@ -91,6 +91,7 @@ class SourceUnitDB(Cache):
                 last_edited_by TEXT,
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
+                embedded_timestamp TIMESTAMP,
                 {Category} TEXT,
                 {Scope} TEXT,
                 summary TEXT,
@@ -122,6 +123,7 @@ class SourceUnitDB(Cache):
                 last_edited_by TEXT,
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
+                embedded_timestamp TIMESTAMP,
                 {Category} TEXT,
                 {Scope} TEXT,
                 summary TEXT,
@@ -147,6 +149,7 @@ class SourceUnitDB(Cache):
                 existing_record['last_edited_by'],
                 existing_record['last_edited_timestamp'],
                 existing_record['added_timestamp'],
+                existing_record['embedded_timestamp'],
                 existing_record[Category],
                 existing_record[Scope],
                 existing_record['summary'],
@@ -168,6 +171,7 @@ class SourceUnitDB(Cache):
                       summary: str,
                       segments: List[Segment],
                       metadata: Dict = None,
+                      embedded_timestamp: datetime = None,
                       **vector_db_fields):
 
         existing_record = self.get(vector_db_fields[Source],
@@ -190,6 +194,7 @@ class SourceUnitDB(Cache):
                                   last_edited_by,
                                   timestamp_str(last_edited_timestamp),
                                   timestamp_str(added_timestamp),
+                                  timestamp_str(embedded_timestamp, default=None),
                                   vector_db_fields.get(Category, ''),
                                   vector_db_fields.get(Scope, ''),
                                   summary,
@@ -213,16 +218,26 @@ class SourceUnitDB(Cache):
                        f"{Source}=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
-    def get_unembedded(self, last_embedded_timestamp) -> List[Dict[str, Any]]:
-        last_embedded_timestamp_str = timestamp_str(last_embedded_timestamp)
+    def get_unembedded(self) -> List[Dict[str, Any]]:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM source_unit
-            WHERE added_timestamp > ? OR last_edited_timestamp > ?
-        """, (last_embedded_timestamp_str, last_embedded_timestamp_str))
-
+            WHERE embedded_timestamp IS NULL
+            OR embedded_timestamp < last_edited_timestamp
+        """)
         rows = cursor.fetchall()
         return [timestamps_to_datetimes(row) for row in rows]
+
+    def flag_as_embedded(self, rows: List[Dict[str, Any]]):
+        query = f"""
+            UPDATE source_unit
+            SET embedded_timestamp = ?
+            WHERE {Source} = ? AND {Source_unit_id} = ?
+        """
+        now = datetime.utcnow().isoformat()  # current UTC time as a string in ISO 8601 format
+        for row in rows:
+            self.conn.execute(query, (now, row[Source], row[Source_unit_id]))
+        self.conn.commit()
 
     def get_last_edited_timestamp(self,
                                   source: str,
