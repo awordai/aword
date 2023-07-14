@@ -3,11 +3,11 @@
 import os
 import json
 import configparser
-from typing import Dict, List, Union
+from datetime import datetime
+from pytz import utc
 
-from aword.embedding.model import make_embedder
-from aword.vector.store import make_store
-from aword.cache import edge
+from importlib import import_module
+from typing import Dict, List, Union
 
 
 def find_config(fname):
@@ -48,9 +48,12 @@ class Awd:
 
         return self.json_configs[config_name]
 
-    def get_source_config(self, source_name: str,
-                          default: Union[Dict, List] = None) -> Union[Dict, List]:
-        return self.get_json_config('sources').get(source_name, default
+    def get_sources_config(self):
+        return self.get_json_config('sources')
+
+    def get_single_source_config(self, source_name: str,
+                                 default: Union[Dict, List] = None) -> Union[Dict, List]:
+        return self.get_sources_config().get(source_name, default
                                                    if default is not None else {})
 
     def get_model_config(self, model_name: str = None) -> Dict:
@@ -90,6 +93,8 @@ class Awd:
             embedding_config['model_name'] = model_name
 
         if model_name not in self._embedder:
+            from aword.embedding.model import make_embedder
+
             model_config = self.get_json_config('models').get(embedding_config['model_name'], {})
             self._embedder[model_name] = make_embedder({**model_config, **embedding_config})
 
@@ -106,6 +111,8 @@ class Awd:
                              "please specify a collection name.")
 
         if collection_name not in self._store:
+            from aword.vector.store import make_store
+
             vector_config = self.get_config('vector')
             embedding_config = self.get_config('embedding')
             self._store[collection_name] = make_store(collection_name,
@@ -121,11 +128,9 @@ class Awd:
         if self._source_unit_cache is None:
             cache_config = self.get_config('cache')
             provider = cache_config.get('provider', 'edge')
+            processor = import_module(f'aword.cache.{provider}')
 
-            if provider == 'edge':
-                self._source_unit_cache = edge.make_source_unit_cache(**cache_config)
-            else:
-                raise RuntimeError(f'Unknown cache provider {provider}')
+            self._source_unit_cache = processor.make_source_unit_cache(**cache_config)
 
         return self._source_unit_cache
 
@@ -135,12 +140,45 @@ class Awd:
             model_name = embedding_config['model_name']
 
         if model_name not in self._chunk_cache:
-            cache_config = self.get_config('cache')
+            cache_config = self.get_config('cache').copy()
             provider = cache_config.get('provider', 'edge')
+            processor = import_module(f'aword.cache.{provider}')
 
-            if provider == 'edge':
-                self._chunk_cache[model_name] = edge.make_source_unit_cache(**cache_config)
-            else:
-                raise RuntimeError(f'Unknown cache provider {provider}')
+            cache_config['model_name'] = model_name
+            self._chunk_cache[model_name] = processor.make_chunk_cache(**cache_config)
 
         return self._chunk_cache[model_name]
+
+    def update_cache(self):
+        sources = ['local']
+        for source_name in sources:
+            processor = import_module(f'aword.source.{source_name}')
+            processor.add_to_cache(self)
+
+    def embed_and_store(self, collection_name: str = None, model_name: str = None):
+        from aword.vector.fields import VectorDbFields
+
+        Source = VectorDbFields.SOURCE.value
+        Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
+        Category = VectorDbFields.CATEGORY.value
+        Scope = VectorDbFields.SCOPE.value
+
+        source_unit_cache = self.get_source_unit_cache()
+        chunk_cache = self.get_chunk_cache(model_name)
+
+        store = self.get_store(collection_name)
+        embedder = self.get_embedder(model_name)
+
+        for source_unit in source_unit_cache.get_unembedded():
+
+            now = datetime.now(utc)
+            chunks = store.store_source_unit(embedder,
+                                             source=source_unit[Source],
+                                             source_unit_id=source_unit[Source_unit_id],
+                                             category=source_unit[Category],
+                                             scope=source_unit[Scope],
+                                             segments=source_unit['segments'])
+            source_unit_cache.flag_as_embedded([source_unit], now=now)
+            chunk_cache.add_or_update(source=source_unit[Source],
+                                      source_unit_id=source_unit[Source_unit_id],
+                                      chunks=chunks)

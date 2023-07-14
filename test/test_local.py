@@ -18,7 +18,7 @@ def test_local(awd):
     segments = add_to_cache(awd)
     assert len(segments) == 39
 
-    time.sleep(1.1)
+    time.sleep(0.5)
 
     segments = add_to_cache(awd)
     assert len(segments) == 0

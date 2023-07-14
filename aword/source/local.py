@@ -36,7 +36,7 @@ def add_to_cache(awd, only_in_directory=None):
     source_unit_cache = awd.get_source_unit_cache()
 
     # pylint: disable=too-many-nested-blocks
-    for source in awd.get_source_config(source_name, []):
+    for source in awd.get_single_source_config(source_name, []):
         directory = source['directory']
         if only_in_directory is not None and directory != only_in_directory:
             continue

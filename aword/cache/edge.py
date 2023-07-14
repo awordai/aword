@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import datetime
 import pickle
 import json
 from itertools import groupby
@@ -8,8 +7,8 @@ import uuid
 
 import sqlite3
 from sqlite3 import Error
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+from typing import Optional, Dict, Any, List
 
 from pytz import utc
 
@@ -230,13 +229,13 @@ class SourceUnitDB(Cache):
         rows = cursor.fetchall()
         return [timestamps_to_datetimes(row) for row in rows]
 
-    def flag_as_embedded(self, rows: List[Dict[str, Any]]):
+    def flag_as_embedded(self, rows: List[Dict[str, Any]], now: datetime = None):
         query = f"""
             UPDATE source_unit
             SET embedded_timestamp = ?
             WHERE {Source} = ? AND {Source_unit_id} = ?
         """
-        now = datetime.utcnow().isoformat()  # current UTC time as a string in ISO 8601 format
+        now = timestamp_str(now or datetime.now(utc))
         for row in rows:
             self.conn.execute(query, (now, row[Source], row[Source_unit_id]))
         self.conn.commit()

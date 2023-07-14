@@ -13,6 +13,7 @@ from aword.vector.fields import VectorDbFields
 
 def test_add_and_get():
     su = E.SourceUnitDB()
+    su.reset_tables()
     vector_db_fields = {
         VectorDbFields.SOURCE.value: 'test_source',
         VectorDbFields.SOURCE_UNIT_ID.value: 'test_id'
