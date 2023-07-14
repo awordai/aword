@@ -22,12 +22,15 @@ def test_add_and_get():
     segment_2 = Segment('body2', uri='http://uri2', created_by='creator2')
     segments = [segment_1, segment_2]
 
+    metadata = {'key': 'value'}
+
     su.add_or_update(uri='file://test_uri',
                      created_by='test_creator',
                      last_edited_by='test_editor',
                      last_edited_timestamp=datetime.now(utc),
                      summary='test_summary',
                      segments=segments,
+                     metadata=metadata,
                      **vector_db_fields)
 
     result = su.get(vector_db_fields[VectorDbFields.SOURCE.value],
@@ -39,6 +42,7 @@ def test_add_and_get():
     assert result['created_by'] == 'test_creator'
     assert result['last_edited_by'] == 'test_editor'
     assert result['summary'] == 'test_summary'
+    assert result['metadata'] == metadata
 
     returned_segments = result['segments']
     assert len(returned_segments) == 2
@@ -91,12 +95,12 @@ def test_get_unembedded():
                      summary='test_summary 3',
                      segments=[], **vector_db_fields)
 
-    last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc) - relativedelta(days=2)
-    results = su.get_unembedded(last_embedded_timestamp)
+    results = su.get_unembedded()
     assert len(results) == 2
 
-    last_embedded_timestamp = last_embedded_timestamp=datetime.now(utc)
-    results = su.get_unembedded(last_embedded_timestamp)
+    su.flag_as_embedded(results)
+
+    results = su.get_unembedded()
     assert len(results) == 0
 
 
@@ -225,7 +229,6 @@ def test_chunk_add_and_get():
     db.add_or_update(source, source_unit_id, chunks, now)
 
     result = db.get(chunk_id)
-    print(result)
     assert result.text == text
     assert result.vector == vector
     assert result.vector_db_id == vector_db_id

@@ -61,6 +61,8 @@ def timestamp_str(ts, default=''):
 
 def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
     def _utc_ts(ts):
+        if not ts:
+            return None
         return T.timestamp_as_utc(ts + ('+00:00' if '+' not in ts else ''))
 
     if row is not None:
@@ -139,7 +141,7 @@ class SourceUnitDB(Cache):
         if existing_record:
             query = """
                 INSERT INTO source_unit_history
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
                 existing_record[Source],
@@ -185,7 +187,7 @@ class SourceUnitDB(Cache):
 
         query = """
             INSERT OR REPLACE INTO source_unit
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(query, (vector_db_fields[Source],
                                   vector_db_fields[Source_unit_id],
