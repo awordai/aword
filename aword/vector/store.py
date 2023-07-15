@@ -11,7 +11,7 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointS
 
 
 import aword.tools as T
-from aword.embedding.model import Embedder
+from aword.model.embedding import Embedder
 from aword.chunk import Chunk
 from aword.segment import Segment
 from aword.vector.fields import VectorDbFields
@@ -22,6 +22,7 @@ Source = VectorDbFields.SOURCE.value
 Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
 Context = VectorDbFields.CONTEXT.value
+Language = VectorDbFields.LANGUAGE.value
 
 
 def make_store(collection_name: str,
@@ -64,6 +65,7 @@ class Store(ABC):
                           categories: str,
                           scope: str,
                           context: str,
+                          language: str,
                           segments: List[Segment]) -> List[Chunk]:
 
         to_upsert = []
@@ -79,6 +81,7 @@ class Store(ABC):
                 chunk.payload[Categories] = categories
                 chunk.payload[Scope] = scope
                 chunk.payload[Context] = context
+                chunk.payload[Language] = language
                 chunk.payload['headings'] = segment.headings
                 chunk.payload['created_by'] = segment.created_by
                 chunk.payload['last_edited_by'] = segment.last_edited_by
@@ -142,6 +145,10 @@ class QdrantStore(Store):
                                          field_name=VectorDbFields.CONTEXT.value,
                                          field_schema="keyword")
 
+        self.client.create_payload_index(collection_name=self.collection_name,
+                                         field_name=VectorDbFields.LANGUAGE.value,
+                                         field_schema="keyword")
+
     def count(self) -> int:
         return self.client.count(collection_name=self.collection_name,
                                  exact=True).count
@@ -150,7 +157,8 @@ class QdrantStore(Store):
                       sources: Union[List[str], str] = None,
                       categories: Union[List[str], str] = None,
                       scopes: Union[List[str], str] = None,
-                      contexts: Union[List[str], str] = None) -> models.Filter:
+                      contexts: Union[List[str], str] = None,
+                      languages: Union[List[str], str] = None) -> models.Filter:
         """There are three filter possibilities: source, categories,
         scope and context. If more than one value comes for each, any
         of the values should match. If more than one filter comes all
@@ -165,6 +173,8 @@ class QdrantStore(Store):
             where[Scope] = scopes
         if contexts:
             where[Context] = contexts
+        if languages:
+            where[Language] = languages
 
         conditions = []
         for key, value in where.items():
@@ -188,14 +198,16 @@ class QdrantStore(Store):
                sources: Union[List[str], str] = None,
                categories: Union[List[str], str] = None,
                scopes: Union[List[str], str] = None,
-               contexts: Union[List[str], str] = None) -> List[Dict]:
+               contexts: Union[List[str], str] = None,
+               languages: Union[List[str], str] = None) -> List[Dict]:
 
         out = self.client.search(collection_name=self.collection_name,
                                  query_vector=query_vector,
                                  query_filter=self.create_filter(sources=sources,
                                                                  categories=categories,
                                                                  scopes=scopes,
-                                                                 contexts=contexts),
+                                                                 contexts=contexts,
+                                                                 languages=languages),
                                  limit=limit)
         return [r.payload for r in out]
 
@@ -240,6 +252,7 @@ class QdrantStore(Store):
                   categories: Union[List[str], str] = None,
                   scopes: Union[List[str], str] = None,
                   contexts: Union[List[str], str] = None,
+                  languages: Union[List[str], str] = None,
                   with_payload: bool = True,
                   with_vectors: bool = False,
                   per_page: int = 10) -> List[Dict]:
@@ -254,7 +267,8 @@ class QdrantStore(Store):
                 scroll_filter=self.create_filter(sources=sources,
                                                  categories=categories,
                                                  scopes=scopes,
-                                                 contexts=contexts),
+                                                 contexts=contexts,
+                                                 languages=languages),
                 with_payload=with_payload,
                 with_vectors=with_vectors)
             all_points += [point.payload for point in points]

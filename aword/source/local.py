@@ -15,8 +15,10 @@ from aword.vector.fields import VectorDbFields
 
 Source = VectorDbFields.SOURCE.value
 Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Category = VectorDbFields.CATEGORY.value
+Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
+Context = VectorDbFields.CONTEXT.value
+Language = VectorDbFields.LANGUAGE.value
 
 
 def add_to_cache(awd, only_in_directory=None):
@@ -42,8 +44,10 @@ def add_to_cache(awd, only_in_directory=None):
             continue
 
         author = source['author']
-        category = source.get('category', '')
+        categories = source.get('categories', [])
         scope = source.get('scope', '')
+        context = source.get('context', '')
+        language = source.get('language', '')
 
         extensions = source.get('extensions', supported_extensions)
         for dirpath, _, filenames in os.walk(directory):
@@ -74,12 +78,13 @@ def add_to_cache(awd, only_in_directory=None):
                             'uri': T.file_to_uri(file_path),
                             Source: full_source_name,
                             Source_unit_id: file_path,
-                            Category: category,
+                            Categories: categories,
                             Scope: scope,
+                            Context: context,
+                            Language: language,
                             'created_by': author,
                             'last_edited_by': author,
                             'last_edited_timestamp': file_modified_dt,
-                            'summary': '',
                             'segments': segments,
                             'metadata': {'directory': directory}
                         })

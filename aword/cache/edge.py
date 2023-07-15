@@ -16,7 +16,7 @@ import aword.tools as T
 from aword.vector.fields import VectorDbFields
 from aword.segment import Segment
 from aword.chunk import Chunk
-from aword.cache.cache import Cache
+from aword.cache.cache import Cache, combine_segments, guess_language
 
 
 DbConnection = None
@@ -26,6 +26,7 @@ Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
 Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
 Context = VectorDbFields.CONTEXT.value
+Language = VectorDbFields.LANGUAGE.value
 
 
 def make_source_unit_cache(**kw):
@@ -71,6 +72,7 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
         out['added_timestamp'] = _utc_ts(out['added_timestamp'])
         out['embedded_timestamp'] = _utc_ts(out['embedded_timestamp'])
         out['metadata'] = json.loads(out['metadata']) or {}
+        out['categories'] = json.loads(out['categories']) or []
         out['segments'] = pickle.loads(out['segments']) or []
         return out
     return None
@@ -97,6 +99,7 @@ class SourceUnitDB(Cache):
                 {Categories} TEXT,
                 {Scope} TEXT,
                 {Context} TEXT,
+                {Language} TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
@@ -130,6 +133,7 @@ class SourceUnitDB(Cache):
                 {Categories} TEXT,
                 {Scope} TEXT,
                 {Context} TEXT,
+                {Language} TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
@@ -143,7 +147,7 @@ class SourceUnitDB(Cache):
         if existing_record:
             query = """
                 INSERT INTO source_unit_history
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
                 existing_record[Source],
@@ -154,9 +158,10 @@ class SourceUnitDB(Cache):
                 existing_record['last_edited_timestamp'],
                 existing_record['added_timestamp'],
                 existing_record['embedded_timestamp'],
-                existing_record[Categories],
+                json.dumps(existing_record[Categories]),
                 existing_record[Scope],
                 existing_record[Context],
+                existing_record[Language],
                 existing_record['summary'],
                 pickle.dumps(existing_record['segments']),
                 json.dumps(existing_record['metadata'], sort_keys=True),
@@ -173,11 +178,17 @@ class SourceUnitDB(Cache):
                       created_by: str,
                       last_edited_by: str,
                       last_edited_timestamp: datetime,
-                      summary: str,
                       segments: List[Segment],
+                      summary: str = '',
                       metadata: Dict = None,
                       embedded_timestamp: datetime = None,
                       **vector_db_fields):
+
+        source_unit_text = combine_segments(segments)
+
+        language = vector_db_fields.get(Language, '')
+        if not language:
+            language = guess_language(source_unit_text)
 
         existing_record = self.get(vector_db_fields[Source],
                                    vector_db_fields[Source_unit_id])
@@ -190,7 +201,7 @@ class SourceUnitDB(Cache):
 
         query = """
             INSERT OR REPLACE INTO source_unit
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(query, (vector_db_fields[Source],
                                   vector_db_fields[Source_unit_id],
@@ -200,9 +211,10 @@ class SourceUnitDB(Cache):
                                   timestamp_str(last_edited_timestamp),
                                   timestamp_str(added_timestamp),
                                   timestamp_str(embedded_timestamp, default=None),
-                                  vector_db_fields.get(Categories, ''),
+                                  json.dumps(vector_db_fields.get(Categories, '')),
                                   vector_db_fields.get(Scope, ''),
                                   vector_db_fields.get(Context, ''),
+                                  language,
                                   summary,
                                   pickle.dumps(segments),
                                   json.dumps(metadata, sort_keys=True)))

@@ -93,7 +93,7 @@ class Awd:
             embedding_config['model_name'] = model_name
 
         if model_name not in self._embedder:
-            from aword.embedding.model import make_embedder
+            from aword.model.embedding import make_embedder
 
             model_config = self.get_json_config('models').get(embedding_config['model_name'], {})
             self._embedder[model_name] = make_embedder({**model_config, **embedding_config})
@@ -160,8 +160,10 @@ class Awd:
 
         Source = VectorDbFields.SOURCE.value
         Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-        Category = VectorDbFields.CATEGORY.value
+        Categories = VectorDbFields.CATEGORIES.value
         Scope = VectorDbFields.SCOPE.value
+        Context = VectorDbFields.CONTEXT.value
+        Language = VectorDbFields.LANGUAGE.value
 
         source_unit_cache = self.get_source_unit_cache()
         chunk_cache = self.get_chunk_cache(model_name)
@@ -175,8 +177,10 @@ class Awd:
             chunks = store.store_source_unit(embedder,
                                              source=source_unit[Source],
                                              source_unit_id=source_unit[Source_unit_id],
-                                             category=source_unit[Category],
+                                             categories=source_unit[Categories],
                                              scope=source_unit[Scope],
+                                             context=source_unit[Context],
+                                             language=source_unit[Language],
                                              segments=source_unit['segments'])
             source_unit_cache.flag_as_embedded([source_unit], now=now)
             chunk_cache.add_or_update(source=source_unit[Source],

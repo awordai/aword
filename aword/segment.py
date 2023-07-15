@@ -51,3 +51,6 @@ class Segment(dict):
     @classmethod
     def copy(cls, instance):
         return cls(**copy.deepcopy(dict(instance)))
+
+    def __str__(self):
+        return ' > '.join(self.headings) + '\n\n' + self.body

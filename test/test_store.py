@@ -31,6 +31,7 @@ def test_store(awd, collection_name, resdir):
                                     categories=categories_1,
                                     scope=scope_1,
                                     context=context_1,
+                                    language='en',
                                     segments=[segment_1])
 
             assert store.count() == 2
@@ -43,6 +44,7 @@ def test_store(awd, collection_name, resdir):
                                     categories=categories_1,
                                     scope=scope_1,
                                     context=context_1,
+                                    language='en',
                                     segments=[segment_1])
             assert store.count() == 2
 
@@ -62,6 +64,7 @@ def test_store(awd, collection_name, resdir):
                                              categories=categories_2,
                                              scope=scope_support,
                                              context=context_2,
+                                             language='en',
                                              segments=[segment_2])
 
             assert len(chunks) == 2
@@ -80,6 +83,7 @@ def test_store(awd, collection_name, resdir):
                                              categories=categories_3,
                                              scope=scope_support,
                                              context=context_2,
+                                             language='en',
                                              segments=[segment_2])
             assert store.count() == 5
             assert len(store.fetch_all()) == 5

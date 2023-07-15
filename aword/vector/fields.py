@@ -9,3 +9,4 @@ class VectorDbFields(Enum):
     CATEGORIES = 'categories'
     SCOPE = 'scope'
     CONTEXT = 'context'
+    LANGUAGE = 'language'
