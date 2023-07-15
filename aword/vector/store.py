@@ -2,11 +2,11 @@
 
 import os
 import uuid
-from typing import List, Dict
+from typing import List, Dict, Union
 from abc import ABC, abstractmethod
 
+from qdrant_client import models
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointStruct
 
 
@@ -17,10 +17,11 @@ from aword.segment import Segment
 from aword.vector.fields import VectorDbFields
 
 
-Source = VectorDbFields.SOURCE.value
 Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Category = VectorDbFields.CATEGORY.value
+Source = VectorDbFields.SOURCE.value
+Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
+Context = VectorDbFields.CONTEXT.value
 
 
 def make_store(collection_name: str,
@@ -52,16 +53,17 @@ class Store(ABC):
                       chunks: List[Chunk]) -> List[Chunk]:
         """Upsert a list of extended chunks to the vector
         database. Extended chunks are dictionaries based in Chunks,
-        with an id, a source_unit_id, a source, a category and a
-        scope.
+        with an id, a source_unit_id, a source, categories, a
+        scope and a context.
         """
 
     def store_source_unit(self,
                           embedder: Embedder,
                           source: str,
                           source_unit_id: str,
-                          category: str,
+                          categories: str,
                           scope: str,
+                          context: str,
                           segments: List[Segment]) -> List[Chunk]:
 
         to_upsert = []
@@ -74,8 +76,9 @@ class Store(ABC):
             for chunk in chunks:
                 chunk.payload[Source] = source
                 chunk.payload[Source_unit_id] = source_unit_id
-                chunk.payload[Category] = category
+                chunk.payload[Categories] = categories
                 chunk.payload[Scope] = scope
+                chunk.payload[Context] = context
                 chunk.payload['headings'] = segment.headings
                 chunk.payload['created_by'] = segment.created_by
                 chunk.payload['last_edited_by'] = segment.last_edited_by
@@ -111,13 +114,13 @@ class QdrantStore(Store):
         self.client = QdrantClient(**client_pars)
 
     def create_collection(self, dimensions: int):
-        distance = {'dot': Distance.DOT,
-                    'cosine': Distance.COSINE,
-                    'euclid': Distance.EUCLID}[self.distance]
+        distance = {'dot': models.Distance.DOT,
+                    'cosine': models.Distance.COSINE,
+                    'euclid': models.Distance.EUCLID}[self.distance]
         self.client.recreate_collection(
             collection_name=self.collection_name,
-            vectors_config=VectorParams(size=dimensions,
-                                        distance=distance))
+            vectors_config=models.VectorParams(size=dimensions,
+                                               distance=distance))
 
         self.client.create_payload_index(collection_name=self.collection_name,
                                          field_name=VectorDbFields.SOURCE_UNIT_ID.value,
@@ -128,24 +131,71 @@ class QdrantStore(Store):
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.CATEGORY.value,
+                                         field_name=VectorDbFields.CATEGORIES.value,
                                          field_schema="keyword")
 
-        # TODO there can be several scopes (it's actually an array),
-        # check that the schema is keyword.
         self.client.create_payload_index(collection_name=self.collection_name,
                                          field_name=VectorDbFields.SCOPE.value,
+                                         field_schema="keyword")
+
+        self.client.create_payload_index(collection_name=self.collection_name,
+                                         field_name=VectorDbFields.CONTEXT.value,
                                          field_schema="keyword")
 
     def count(self) -> int:
         return self.client.count(collection_name=self.collection_name,
                                  exact=True).count
 
+    def create_filter(self,
+                      sources: Union[List[str], str] = None,
+                      categories: Union[List[str], str] = None,
+                      scopes: Union[List[str], str] = None,
+                      contexts: Union[List[str], str] = None) -> models.Filter:
+        """There are three filter possibilities: source, categories,
+        scope and context. If more than one value comes for each, any
+        of the values should match. If more than one filter comes all
+        should be applied.
+        """
+        where = {}
+        if sources:
+            where[Source] = sources
+        if categories:
+            where[Categories] = categories
+        if scopes:
+            where[Scope] = scopes
+        if contexts:
+            where[Context] = contexts
+
+        conditions = []
+        for key, value in where.items():
+            if value:
+                if isinstance(value, list):
+                    condition = models.FieldCondition(
+                        key=key,
+                        match=models.MatchAny(any=value),
+                    )
+                else:
+                    condition = models.FieldCondition(
+                        key=key,
+                        match=models.MatchValue(value=value),
+                    )
+                conditions.append(condition)
+        return models.Filter(must=conditions)
+
     def search(self,
                query_vector: List[float],
-               limit: int) -> List[Dict]:
+               limit: int,
+               sources: Union[List[str], str] = None,
+               categories: Union[List[str], str] = None,
+               scopes: Union[List[str], str] = None,
+               contexts: Union[List[str], str] = None) -> List[Dict]:
+
         out = self.client.search(collection_name=self.collection_name,
                                  query_vector=query_vector,
+                                 query_filter=self.create_filter(sources=sources,
+                                                                 categories=categories,
+                                                                 scopes=scopes,
+                                                                 contexts=contexts),
                                  limit=limit)
         return [r.payload for r in out]
 
@@ -174,3 +224,39 @@ class QdrantStore(Store):
         self.client.upsert(collection_name=self.collection_name,
                            points=points)
         return out
+
+    def retrieve(self,
+                 chunk_ids: List[str],
+                 with_payload: bool = True,
+                 with_vectors: bool = False) -> List[Dict]:
+
+        return self.client.retrieve(collection_name=self.collection_name,
+                                    ids=chunk_ids,
+                                    with_payload=with_payload,
+                                    with_vectors=with_vectors)
+
+    def fetch_all(self,
+                  sources: Union[List[str], str] = None,
+                  categories: Union[List[str], str] = None,
+                  scopes: Union[List[str], str] = None,
+                  contexts: Union[List[str], str] = None,
+                  with_payload: bool = True,
+                  with_vectors: bool = False,
+                  per_page: int = 10) -> List[Dict]:
+
+        all_points = []
+        offset = 0
+        while offset is not None:
+            points, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=per_page,
+                offset=offset,
+                scroll_filter=self.create_filter(sources=sources,
+                                                 categories=categories,
+                                                 scopes=scopes,
+                                                 contexts=contexts),
+                with_payload=with_payload,
+                with_vectors=with_vectors)
+            all_points += [point.payload for point in points]
+
+        return all_points

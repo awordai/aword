@@ -23,8 +23,9 @@ DbConnection = None
 
 Source = VectorDbFields.SOURCE.value
 Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Category = VectorDbFields.CATEGORY.value
+Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
+Context = VectorDbFields.CONTEXT.value
 
 
 def make_source_unit_cache(**kw):
@@ -93,8 +94,9 @@ class SourceUnitDB(Cache):
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
                 embedded_timestamp TIMESTAMP,
-                {Category} TEXT,
+                {Categories} TEXT,
                 {Scope} TEXT,
+                {Context} TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
@@ -125,8 +127,9 @@ class SourceUnitDB(Cache):
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
                 embedded_timestamp TIMESTAMP,
-                {Category} TEXT,
+                {Categories} TEXT,
                 {Scope} TEXT,
+                {Context} TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
@@ -140,7 +143,7 @@ class SourceUnitDB(Cache):
         if existing_record:
             query = """
                 INSERT INTO source_unit_history
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
                 existing_record[Source],
@@ -151,8 +154,9 @@ class SourceUnitDB(Cache):
                 existing_record['last_edited_timestamp'],
                 existing_record['added_timestamp'],
                 existing_record['embedded_timestamp'],
-                existing_record[Category],
+                existing_record[Categories],
                 existing_record[Scope],
+                existing_record[Context],
                 existing_record['summary'],
                 pickle.dumps(existing_record['segments']),
                 json.dumps(existing_record['metadata'], sort_keys=True),
@@ -186,7 +190,7 @@ class SourceUnitDB(Cache):
 
         query = """
             INSERT OR REPLACE INTO source_unit
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.conn.execute(query, (vector_db_fields[Source],
                                   vector_db_fields[Source_unit_id],
@@ -196,8 +200,9 @@ class SourceUnitDB(Cache):
                                   timestamp_str(last_edited_timestamp),
                                   timestamp_str(added_timestamp),
                                   timestamp_str(embedded_timestamp, default=None),
-                                  vector_db_fields.get(Category, ''),
+                                  vector_db_fields.get(Categories, ''),
                                   vector_db_fields.get(Scope, ''),
+                                  vector_db_fields.get(Context, ''),
                                   summary,
                                   pickle.dumps(segments),
                                   json.dumps(metadata, sort_keys=True)))

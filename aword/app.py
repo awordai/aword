@@ -4,10 +4,10 @@ import os
 import json
 import configparser
 from datetime import datetime
-from pytz import utc
-
 from importlib import import_module
 from typing import Dict, List, Union
+
+from pytz import utc
 
 
 def find_config(fname):
