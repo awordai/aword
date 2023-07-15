@@ -55,14 +55,14 @@ def get_embeddings(chunked_texts: List[str],
 @retry(wait=wait_random_exponential(min=1, max=20),
        stop=stop_after_attempt(6),
        retry=retry_if_not_exception_type(openai.InvalidRequestError))
-def ask_question(model_name: str,
-                 sytem_prompt: str,
-                 user_prompt: str):
+def chat(model_name: str,
+         system_prompt: str,
+         user_prompt: str):
     ensure_api()
     return openai.ChatCompletion.create(
         model=model_name,
         messages=[
-            {"role": "system", "content": sytem_prompt},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
     )["choices"][0]["message"]["content"]

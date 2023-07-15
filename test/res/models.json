@@ -13,5 +13,8 @@
     "normalized": false,
     "provider": "huggingface",
     "distance": "dot"
+  },
+  "gpt-3.5-turbo": {
+    "provider": "openai"
   }
 }

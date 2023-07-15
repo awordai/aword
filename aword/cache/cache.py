@@ -17,6 +17,14 @@ def guess_language(source_unit_text):
 
 class Cache(ABC):
 
+    def __init__(self, summarizer):
+        self.summarizer = summarizer
+
+    def summarize(self, text):
+        if self.summarizer is not None:
+            return self.summarizer.summarize(text)
+        return ''
+
     @abstractmethod
     def get_last_edited_timestamp(self, source, source_unit_id):
         """

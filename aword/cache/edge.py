@@ -29,8 +29,8 @@ Context = VectorDbFields.CONTEXT.value
 Language = VectorDbFields.LANGUAGE.value
 
 
-def make_source_unit_cache(**kw):
-    return SourceUnitDB(fname=kw.get('db_file', None))
+def make_source_unit_cache(summarizer=None, **kw):
+    return SourceUnitDB(summarizer, fname=kw.get('db_file', None))
 
 
 def make_chunk_cache(**kw):
@@ -79,7 +79,9 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
 
 
 class SourceUnitDB(Cache):
-    def __init__(self, fname=None):
+    def __init__(self, summarizer=None, fname=None):
+        super().__init__(summarizer)
+
         self.conn = get_connection(fname)
         self.create_table()
         self.create_history_table()
@@ -187,8 +189,6 @@ class SourceUnitDB(Cache):
         source_unit_text = combine_segments(segments)
 
         language = vector_db_fields.get(Language, '')
-        if not language:
-            language = guess_language(source_unit_text)
 
         existing_record = self.get(vector_db_fields[Source],
                                    vector_db_fields[Source_unit_id])
@@ -214,8 +214,8 @@ class SourceUnitDB(Cache):
                                   json.dumps(vector_db_fields.get(Categories, '')),
                                   vector_db_fields.get(Scope, ''),
                                   vector_db_fields.get(Context, ''),
-                                  language,
-                                  summary,
+                                  language or guess_language(source_unit_text),
+                                  summary or self.summarize(source_unit_text),
                                   pickle.dumps(segments),
                                   json.dumps(metadata, sort_keys=True)))
         self.conn.commit()

@@ -32,6 +32,7 @@ class Awd:
         self.json_configs = {}
         self.collection_name = collection_name
         self._embedder = {}
+        self._summarizer = {}
         self._store = {}
         self._source_unit_cache = None
         self._chunk_cache = {}
@@ -89,16 +90,33 @@ class Awd:
 
     def get_embedder(self, model_name: str = None):
         embedding_config = self.get_config('embedding').copy()
-        if model_name is not None:
+        if model_name is None:
+            model_name = embedding_config['model_name']
+        else:
             embedding_config['model_name'] = model_name
 
         if model_name not in self._embedder:
-            from aword.model.embedding import make_embedder
+            from aword.model.embedder import make_embedder
 
             model_config = self.get_json_config('models').get(embedding_config['model_name'], {})
             self._embedder[model_name] = make_embedder({**model_config, **embedding_config})
 
         return self._embedder[model_name]
+
+    def get_summarizer(self, model_name: str = None):
+        summarizing_config = self.get_config('summarizing').copy()
+        if model_name is None:
+            model_name = summarizing_config['model_name']
+        else:
+            summarizing_config['model_name'] = model_name
+
+        if model_name not in self._summarizer:
+            from aword.model.summarizer import make_summarizer
+
+            model_config = self.get_json_config('models').get(summarizing_config['model_name'], {})
+            self._summarizer[model_name] = make_summarizer({**model_config, **summarizing_config})
+
+        return self._summarizer[model_name]
 
     def get_store(self, collection_name: str = None):
         if collection_name is None:
@@ -130,7 +148,8 @@ class Awd:
             provider = cache_config.get('provider', 'edge')
             processor = import_module(f'aword.cache.{provider}')
 
-            self._source_unit_cache = processor.make_source_unit_cache(**cache_config)
+            self._source_unit_cache = processor.make_source_unit_cache(
+                self.get_summarizer(), **cache_config)
 
         return self._source_unit_cache
 

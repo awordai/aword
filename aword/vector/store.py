@@ -11,7 +11,7 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointS
 
 
 import aword.tools as T
-from aword.model.embedding import Embedder
+from aword.model.embedder import Embedder
 from aword.chunk import Chunk
 from aword.segment import Segment
 from aword.vector.fields import VectorDbFields
