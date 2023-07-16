@@ -147,9 +147,10 @@ class Awd:
             cache_config = self.get_config('cache')
             provider = cache_config.get('provider', 'edge')
             processor = import_module(f'aword.cache.{provider}')
+            add_summaries = cache_config.get('add_summaries', 'False').lower() == 'true'
 
             self._source_unit_cache = processor.make_source_unit_cache(
-                self.get_summarizer(), **cache_config)
+                self.get_summarizer() if add_summaries else None, **cache_config)
 
         return self._source_unit_cache
 

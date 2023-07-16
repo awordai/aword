@@ -369,7 +369,7 @@ class ChunkDB:
             self.conn.executemany(f"""
                 INSERT OR REPLACE INTO {self.table_name}
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, [(str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
+            """, [(chunk.chunk_id or str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
                    source,
                    source_unit_id,
                    chunk.text,

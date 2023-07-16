@@ -224,7 +224,10 @@ def test_chunk_add_and_get():
     vector = [1, 2, 3]
     vector_db_id = "test_vector_db_id"
     chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
-    chunks = [Chunk(text, vector=vector, vector_db_id=vector_db_id)]
+    chunks = [Chunk(text,
+                    vector=vector,
+                    vector_db_id=vector_db_id,
+                    chunk_id=chunk_id)]
 
     now = datetime.now(utc)
     db.add_or_update(source, source_unit_id, chunks, now)
