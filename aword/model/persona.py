@@ -34,3 +34,13 @@ class OAIPersona:
         return oai.chat(model_name=self.model_name,
                         system_prompt=self.system_prompt,
                         user_prompt=self.user_prompt_preface + text)
+
+
+def main():
+    import sys
+    from aword.app import Awd
+
+    persona_name = sys.argv[1].replace('@', '')
+    question = ' '.join(sys.argv[2:])
+    persona = Awd().get_persona(persona_name)
+    print(persona.ask(question))

@@ -21,7 +21,6 @@ def find_config(fname):
 
     config_path = next((path for path in config_locations
                         if path and os.path.isfile(path)), None)
-    print(f'Found {config_path}')
     return config_path
 
 
