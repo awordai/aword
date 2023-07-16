@@ -32,7 +32,7 @@ class Awd:
         self.json_configs = {}
         self.collection_name = collection_name
         self._embedder = {}
-        self._summarizer = {}
+        self._personas = {}
         self._store = {}
         self._source_unit_cache = None
         self._chunk_cache = {}
@@ -103,20 +103,30 @@ class Awd:
 
         return self._embedder[model_name]
 
-    def get_summarizer(self, model_name: str = None):
-        summarizing_config = self.get_config('summarizing').copy()
-        if model_name is None:
-            model_name = summarizing_config['model_name']
-        else:
-            summarizing_config['model_name'] = model_name
+    def get_persona(self, persona_name: str):
+        if persona_name not in self._personas:
+            personas_config = self.get_json_config('personas')
+            if persona_name not in personas_config:
+                raise RuntimeError(f'No configuration found for persona {persona_name}')
+            config = personas_config[persona_name].copy()
 
-        if model_name not in self._summarizer:
-            from aword.model.summarizer import make_summarizer
+            if 'system_prompt' not in config:
+                if 'system_prompt_file' not in config:
+                    raise RuntimeError(f'Need a system prompt in the config of {persona_name}')
 
-            model_config = self.get_json_config('models').get(summarizing_config['model_name'], {})
-            self._summarizer[model_name] = make_summarizer({**model_config, **summarizing_config})
+                with open(config['system_prompt_file'], encoding='utf-8') as fin:
+                    config['system_prompt'] = fin.read()
 
-        return self._summarizer[model_name]
+            if 'user_prompt_preface' not in config and 'user_prompt_preface_file' in config:
+                with open(config['user_prompt_preface_file'], encoding='utf-8') as fin:
+                    config['user_prompt_preface'] = fin.read()
+
+            from aword.model.persona import make_persona
+
+            model_config = self.get_json_config('models')[config['model_name']]
+            self._personas[persona_name] = make_persona({**model_config, **config})
+
+        return self._personas[persona_name]
 
     def get_store(self, collection_name: str = None):
         if collection_name is None:
@@ -150,7 +160,7 @@ class Awd:
             add_summaries = cache_config.get('add_summaries', 'False').lower() == 'true'
 
             self._source_unit_cache = processor.make_source_unit_cache(
-                self.get_summarizer() if add_summaries else None, **cache_config)
+                self.get_persona('summarizer') if add_summaries else None, **cache_config)
 
         return self._source_unit_cache
 

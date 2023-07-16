@@ -1,1 +1,0 @@
-You will be provided with a document, and your task is to write a summary. You should try to include action items and numerical values in the summary.  The summary should be in the same language as the document. 
