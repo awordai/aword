@@ -22,7 +22,9 @@ dependencies = [
     "mistune",
     "tenacity",
     "python-dateutil >= 2.8.2",
-    "langdetect >= 1.0.9"
+    "langdetect >= 1.0.9",
+    "tiktoken",
+    "pytz"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
