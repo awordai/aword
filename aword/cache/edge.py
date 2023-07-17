@@ -272,6 +272,17 @@ class SourceUnitDB(Cache):
             return T.timestamp_as_utc(row['last_edited_timestamp'] + '+00:00')
         return None
 
+    def get_most_recent_last_edited_timestamp(self) -> Optional[Chunk]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM source_unit ORDER BY last_edited_timestamp DESC LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        return T.timestamp_as_utc(
+            row['last_edited_timestamp'] + ('+00:00' if '+' not in row['last_edited_timestamp']
+                                            else ''))
+
     def get_history(self, source: str, source_unit_id: str) -> List[Dict[str, Any]]:
         """Returns the history of a source unit.
 
@@ -382,7 +393,6 @@ class ChunkDB:
         except sqlite3.Error as e:
             print(e)
 
-    # FIXME It should get the source and source_unit_id as well, to enable the get_unembedded
     def get_most_recent_addition_datetime(self) -> Optional[Chunk]:
         """We can use this as the timestamp for
         SourceUnitDB.get_unembedded.  It enables quick selection of

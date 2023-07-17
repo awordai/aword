@@ -81,7 +81,7 @@ class Store(ABC):
                 chunk.payload[Categories] = categories
                 chunk.payload[Scope] = scope
                 chunk.payload[Context] = context
-                chunk.payload[Language] = language
+                chunk.payload[Language] = segment.language or language
                 chunk.payload['headings'] = segment.headings
                 chunk.payload['created_by'] = segment.created_by
                 chunk.payload['last_edited_by'] = segment.last_edited_by

@@ -12,6 +12,7 @@ class Segment(dict):
                  body: str,
                  uri: str = None,
                  headings: List[str] = None,
+                 language: str = None,
                  created_by: str = None,
                  last_edited_by: str = None,
                  last_edited_timestamp: Union[datetime.datetime, str] = None,
@@ -26,6 +27,7 @@ class Segment(dict):
         self.last_edited_timestamp = last_edited_timestamp
 
         self['headings'] = headings or []
+        self['language'] = language
         self['created_by'] = created_by
         self['last_edited_by'] = last_edited_by or created_by
         self['metadata'] = metadata or {}

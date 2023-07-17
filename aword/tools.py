@@ -33,7 +33,7 @@ def timestamp_as_utc(timestamp: Union[datetime.datetime, str] = None) -> datetim
 
 
 def validate_uri(uri, raise_if_invalid=True):
-    if uri is not None:
+    if uri:
         # Make sure URI is valid
         if urllib.parse.urlparse(uri).scheme == "":
             if raise_if_invalid:
