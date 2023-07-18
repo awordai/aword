@@ -128,7 +128,12 @@ class Awd:
         return self._personas[persona_name]
 
     def get_store(self, collection_name: str = None):
+        vector_config = self.get_config('vector')
         if collection_name is None:
+            collection_name = vector_config.get('collection_name', None)
+
+        if collection_name is None:
+
             # If there's only one store, return it
             if len(self._store) == 1:
                 return next(iter(self._store.values()))
@@ -140,7 +145,6 @@ class Awd:
         if collection_name not in self._store:
             from aword.vector.store import make_store
 
-            vector_config = self.get_config('vector')
             embedding_config = self.get_config('embedding')
             self._store[collection_name] = make_store(collection_name,
                                                       {**vector_config, **embedding_config})
