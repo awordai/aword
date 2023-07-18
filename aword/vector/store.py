@@ -218,6 +218,11 @@ class QdrantStore(Store):
                                               match=MatchValue(value=source_unit_id))]))
 
     def upsert_chunks(self, chunks: List[Chunk]) -> List[Chunk]:
+        """Uploads and inserts chunks to the vector database. It
+        returns a copy of the list of chunks, where each chunk
+        includes a vector_db_id field with a newly generated id with
+        which it can be retrieved from the vector database.
+        """
         out = []
         points = []
         for chunk in chunks:
