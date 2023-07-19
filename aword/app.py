@@ -150,7 +150,7 @@ class Awd:
 
         return self._store[collection_name]
 
-    def create_store_collection(self, collection_name: str):
+    def create_store_collection(self, collection_name: str = None):
         store = self.get_store(collection_name)
         store.create_collection(dimensions=self.get_embedder().dimensions)
 
@@ -203,9 +203,10 @@ class Awd:
         store = self.get_store(collection_name)
         embedder = self.get_embedder(model_name)
 
+        total_chunks = 0
         for source_unit in source_unit_cache.get_unembedded():
-
             now = datetime.now(utc)
+            print('...', source_unit[Source_unit_id])
             chunks = store.store_source_unit(embedder,
                                              source=source_unit[Source],
                                              source_unit_id=source_unit[Source_unit_id],
@@ -218,3 +219,7 @@ class Awd:
             chunk_cache.add_or_update(source=source_unit[Source],
                                       source_unit_id=source_unit[Source_unit_id],
                                       chunks=chunks)
+            print(f'    -> {len(chunks)} chunks')
+            total_chunks += len(chunks)
+
+        print(f'Added {total_chunks} chunks')

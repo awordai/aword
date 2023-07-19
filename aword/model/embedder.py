@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import re
-import uuid
 from typing import Callable, Any, List, Dict
 
 import numpy as np
@@ -20,10 +19,6 @@ def make_embedder(config: Dict):
         return OAIEmbedder(**config)
 
     raise ValueError(f"Unknown model provider '{provider}'")
-
-
-def make_id(text):
-    return str(uuid.uuid5(uuid.NAMESPACE_X500, text))
 
 
 def get_col_average_from_list_of_lists(list_of_lists: List[List]):
@@ -118,9 +113,8 @@ class Embedder:
                                                                        self.chunk_size)))
 
         embeddings = self.get_embeddings(chunked_texts)
-        chunks = [Chunk(text=t,
-                        vector=e,
-                        chunk_id=make_id(t))
+        chunks = [Chunk(vector=e,
+                        body=t)
                   for t, e in (zip(chunked_texts, embeddings))]
 
         if include_full_text_if_chunked and len(chunks) > 1:

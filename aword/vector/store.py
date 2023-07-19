@@ -9,16 +9,15 @@ from qdrant_client import models
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointStruct
 
-
 import aword.tools as T
 from aword.model.embedder import Embedder
 from aword.chunk import Chunk
 from aword.segment import Segment
 from aword.vector.fields import VectorDbFields
 
-
 Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
 Source = VectorDbFields.SOURCE.value
+Body = VectorDbFields.BODY.value
 Categories = VectorDbFields.CATEGORIES.value
 Scope = VectorDbFields.SCOPE.value
 Context = VectorDbFields.CONTEXT.value
@@ -29,7 +28,8 @@ def make_store(collection_name: str,
                config: Dict):
     provider = config.get('provider', 'qdrant')
     if provider == 'qdrant':
-        return QdrantStore(collection_name, **config)
+        # collection_name can come in the config, overriding it if so.
+        return QdrantStore(**{**config, **{'collection_name': collection_name}})
 
     raise ValueError(f'Unknown vector store provider {provider}')
 
@@ -78,6 +78,7 @@ class Store(ABC):
             for chunk in chunks:
                 chunk.payload[Source] = source
                 chunk.payload[Source_unit_id] = source_unit_id
+                chunk.payload[Body] = chunk.text
                 chunk.payload[Categories] = categories
                 chunk.payload[Scope] = scope
                 chunk.payload[Context] = context
@@ -106,9 +107,10 @@ class QdrantStore(Store):
         self.distance = distance
 
         if url:
-            T.load_environment()
-            client_pars = {'url': url,
-                           'api_key': os.environ['QDRANT_API_KEY']}
+            client_pars = {'url': url}
+            if 'localhost' not in url and '127.0.0' not in url:
+                T.load_environment()
+                client_pars['api_key'] = os.environ['QDRANT_API_KEY']
         elif local_db:
             client_pars = {'path': local_db}
         else:
