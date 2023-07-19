@@ -133,7 +133,6 @@ class Awd:
             collection_name = vector_config.get('collection_name', None)
 
         if collection_name is None:
-
             # If there's only one store, return it
             if len(self._store) == 1:
                 return next(iter(self._store.values()))

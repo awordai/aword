@@ -13,7 +13,8 @@ def test_update_cache(awd):
     assert sum(len(source_unit['segments']) for source_unit in unembedded) == 39
 
 
-def test_embed_and_store(awd, collection_name):
+# pylint: disable=unused-argument
+def test_embed_and_store(awd, collection_name, ensure_empty_collection):
     awd.embed_and_store(collection_name=collection_name)
 
     suc = awd.get_source_unit_cache()

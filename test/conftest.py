@@ -24,3 +24,11 @@ def resdir():
 @pytest.fixture(scope='module')
 def collection_name():
     return 'test-collection'
+
+
+# pylint: disable=redefined-outer-name
+@pytest.fixture(scope='module')
+def ensure_empty_collection(awd, collection_name):
+    store = awd.get_store(collection_name)
+    store.client.delete_collection(collection_name)
+    awd.create_store_collection(collection_name)
