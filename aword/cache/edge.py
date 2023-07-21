@@ -13,20 +13,12 @@ from typing import Optional, Dict, Any, List
 from pytz import utc
 
 import aword.tools as T
-from aword.vector.fields import VectorDbFields
 from aword.segment import Segment
 from aword.chunk import Chunk
 from aword.cache.cache import Cache, combine_segments, guess_language
 
 
 DbConnection = None
-
-Source = VectorDbFields.SOURCE.value
-Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Categories = VectorDbFields.CATEGORIES.value
-Scope = VectorDbFields.SCOPE.value
-Context = VectorDbFields.CONTEXT.value
-Language = VectorDbFields.LANGUAGE.value
 
 
 def make_source_unit_cache(summarizer=None, **kw):

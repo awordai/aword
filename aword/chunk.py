@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import uuid
-from typing import List, Dict, Any
+import json
+from datetime import datetime
+import copy
+from typing import List, Dict, Union
 
+import aword.tools as T
 from aword.vector.fields import VectorDbFields
 
 Body = VectorDbFields.BODY.value
@@ -12,20 +16,71 @@ def make_id(text):
     return str(uuid.uuid5(uuid.NAMESPACE_X500, text))
 
 
-class Chunk(dict):
+class Payload(dict):
+
     def __init__(self,
-                 text: str,
+                 body: str,
+                 source: str = '',
+                 source_unit_id: str = '',
+                 categories: Union[Dict, str] = '[]',
+                 scope: str = '',
+                 context: str = '',
+                 language: str = '',
+                 headings: Union[List[str], str] = '[]',
+                 created_by: str = '',
+                 last_edited_by: str = '',
+                 last_edited_timestamp: Union[datetime, str] = None,
+                 metadata: Union[Dict, str] = '{}'):
+
+        super().__init__()
+
+        self['body'] = body
+        self['source'] = source
+        self['source_unit_id'] = source_unit_id
+        # Setters will validate and load json
+        self.categories = categories
+        self['scope'] = scope
+        self['context'] = context
+        self['language'] = language.lower()
+        self.headings = headings
+        self['created_by'] = created_by
+        self['last_edited_by'] = last_edited_by
+        self.last_edited_timestamp = last_edited_timestamp
+        self.metadata = metadata
+
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        raise AttributeError(f"No such attribute: {name}")
+
+    def __setattr__(self, name, value):
+        if 'timestamp' in name:
+            value = T.timestamp_as_utc(value)
+        elif name in ('categories', 'headings', 'metadata'):
+            if isinstance(value, str):
+                value = json.loads(value)
+        self[name] = value
+
+    def copy(self):
+        return self.__class__(**copy.deepcopy(dict(self)))
+
+    def __str__(self):
+        return ' > '.join(self.headings) + '\n\n' + self.body
+
+
+class Chunk(dict):
+
+    def __init__(self,
+                 payload: Payload,
                  chunk_id: str = None,
                  vector: List[float] = None,
-                 payload: Dict[str, Any] = None,
                  vector_db_id: str = None):
         """The payload dictionary should include a source and a
         source_unit_id. Possibly also a category and a scope.
         """
-        self.text = text
         self.vector = vector
-        self.payload = (payload.copy() or {}).update({Body: text})
-        self.chunk_id = chunk_id or make_id(text)
+        self.payload = payload
+        self.chunk_id = chunk_id or make_id(payload.body)
         self.vector_db_id = vector_db_id
 
     def __getattr__(self, name):
@@ -34,13 +89,11 @@ class Chunk(dict):
         raise AttributeError(f"No such attribute: {name}")
 
     def __setattr__(self, name, value):
-        if name not in ('text', 'vector', 'payload', 'chunk_id', 'vector_db_id'):
+        if name not in ('vector', 'payload', 'chunk_id', 'vector_db_id'):
             raise AttributeError('Cannot have a chunk with attribute ' + name)
         self[name] = value
 
     def copy(self):
-        return Chunk(self.text,
-                     vector=self.vector,
-                     payload=self.payload.copy(),
-                     chunk_id=self.chunk_id,
-                     vector_db_id=self.vector_db_id)
+        out = self.__class__(**copy.deepcopy(dict(self)))
+        out['payload'] = Payload(**out['payload'])
+        return out

@@ -100,7 +100,7 @@ class Embedder:
 
     def get_embedded_chunks(self,
                             text: str,
-                            include_full_text_if_chunked: bool = False):
+                            include_full_text_if_chunked: bool = False) -> List[Chunk]:
         """Returns a list of Chunk objects.  If include_full_text_if_chunked is
         True it will add an embedding for the full text when it has been
         chunked.
