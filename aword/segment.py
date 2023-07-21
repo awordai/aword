@@ -13,9 +13,9 @@ class Segment(dict):
                  body: str,
                  uri: str = None,
                  headings: Union[List[str], str] = '[]',
-                 language: str = None,
-                 created_by: str = None,
-                 last_edited_by: str = None,
+                 language: str = '',
+                 created_by: str = '',
+                 last_edited_by: str = '',
                  last_edited_timestamp: Union[datetime.datetime, str] = None,
                  metadata: Union[Dict[str, Any], str] = '{}'):
 
@@ -31,15 +31,24 @@ class Segment(dict):
         self.last_edited_timestamp = last_edited_timestamp
         self.metadata = metadata
 
-
     def __getattr__(self, name):
         if name in self:
             return self[name]
         raise AttributeError(f"No such attribute: {name}")
 
     def __setattr__(self, name, value):
+        if name not in ('body',
+                        'uri',
+                        'headings',
+                        'language',
+                        'created_by',
+                        'last_edited_by',
+                        'last_edited_timestamp',
+                        'metadata'):
+            raise ValueError(f'Invalid Segment field {name}')
+
         if 'timestamp' in name:
-            value = T.timestamp_as_utc(value)
+            value = T.timestamp_as_utc(value).isoformat()
         elif name == 'uri':
             value = T.validate_uri(value)
         elif name in ('headings', 'metadata'):

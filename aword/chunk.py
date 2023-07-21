@@ -7,9 +7,6 @@ import copy
 from typing import List, Dict, Union
 
 import aword.tools as T
-from aword.vector.fields import VectorDbFields
-
-Body = VectorDbFields.BODY.value
 
 
 def make_id(text):
@@ -54,8 +51,22 @@ class Payload(dict):
         raise AttributeError(f"No such attribute: {name}")
 
     def __setattr__(self, name, value):
+        if name not in ('body',
+                        'source',
+                        'source_unit_id',
+                        'categories',
+                        'scope',
+                        'context',
+                        'language',
+                        'headings',
+                        'created_by',
+                        'last_edited_by',
+                        'last_edited_timestamp',
+                        'metadata'):
+            raise ValueError(f'Invalid Payload field {name}')
+
         if 'timestamp' in name:
-            value = T.timestamp_as_utc(value)
+            value = T.timestamp_as_utc(value).isoformat()
         elif name in ('categories', 'headings', 'metadata'):
             if isinstance(value, str):
                 value = json.loads(value)
@@ -71,7 +82,7 @@ class Payload(dict):
 class Chunk(dict):
 
     def __init__(self,
-                 payload: Payload,
+                 payload: Union[Payload, dict],
                  chunk_id: str = None,
                  vector: List[float] = None,
                  vector_db_id: str = None):
@@ -79,7 +90,7 @@ class Chunk(dict):
         source_unit_id. Possibly also a category and a scope.
         """
         self.vector = vector
-        self.payload = payload
+        self.payload = payload if isinstance(payload, Payload) else Payload(**payload)
         self.chunk_id = chunk_id or make_id(payload.body)
         self.vector_db_id = vector_db_id
 

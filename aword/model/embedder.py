@@ -5,7 +5,7 @@ from typing import Callable, Any, List, Dict
 
 import numpy as np
 
-from aword.chunk import Chunk
+from aword.chunk import Payload, Chunk
 from aword.apis import oai
 
 
@@ -113,8 +113,8 @@ class Embedder:
                                                                        self.chunk_size)))
 
         embeddings = self.get_embeddings(chunked_texts)
-        chunks = [Chunk(vector=e,
-                        body=t)
+        chunks = [Chunk(payload=Payload(body=t),
+                        vector=e)
                   for t, e in (zip(chunked_texts, embeddings))]
 
         if include_full_text_if_chunked and len(chunks) > 1:
@@ -123,9 +123,9 @@ class Embedder:
                 average_embedding = get_col_average_from_list_of_lists(embeddings)
             else:
                 average_embedding = self.get_embeddings(['\n\n'.join(chunked_texts)])[0]
-            chunks.append(Chunk(text=text,
-                                vector=average_embedding,
-                                chunk_id=make_id(text)))
+            chunks.append(Chunk(payload=Payload(body=text),
+                                vector=average_embedding))
+
         return chunks
 
 

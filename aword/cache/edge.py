@@ -8,13 +8,13 @@ import uuid
 import sqlite3
 from sqlite3 import Error
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 from pytz import utc
 
 import aword.tools as T
 from aword.segment import Segment
-from aword.chunk import Chunk
+from aword.chunk import Payload, Chunk
 from aword.cache.cache import Cache, combine_segments, guess_language
 
 
@@ -49,7 +49,8 @@ def close_connection():
 
 
 def timestamp_str(ts, default=''):
-    return T.timestamp_as_utc(ts).strftime('%Y-%m-%d %H:%M:%S.%f') if ts else default
+    return T.timestamp_as_utc(ts).isoformat() if ts else default
+    # return T.timestamp_as_utc(ts).strftime('%Y-%m-%d %H:%M:%S.%f') if ts else default
 
 
 def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
@@ -80,24 +81,24 @@ class SourceUnitDB(Cache):
         self.fname = fname
 
     def create_table(self):
-        self.conn.execute(f"""
+        self.conn.execute("""
             CREATE TABLE IF NOT EXISTS source_unit (
-                {Source} TEXT,
-                {Source_unit_id} TEXT,
+                source TEXT,
+                source_unit_id TEXT,
                 uri TEXT,
                 created_by TEXT,
                 last_edited_by TEXT,
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
                 embedded_timestamp TIMESTAMP,
-                {Categories} TEXT,
-                {Scope} TEXT,
-                {Context} TEXT,
-                {Language} TEXT,
+                categories TEXT,
+                scope TEXT,
+                context TEXT,
+                language TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
-                PRIMARY KEY({Source_unit_id}, {Source})
+                PRIMARY KEY(source_unit_id, source)
             )
         """)
 
@@ -114,25 +115,25 @@ class SourceUnitDB(Cache):
             print(e)
 
     def create_history_table(self):
-        self.conn.execute(f"""
+        self.conn.execute("""
             CREATE TABLE IF NOT EXISTS source_unit_history (
-                {Source} TEXT,
-                {Source_unit_id} TEXT,
+                source TEXT,
+                source_unit_id TEXT,
                 uri TEXT,
                 created_by TEXT,
                 last_edited_by TEXT,
                 last_edited_timestamp TIMESTAMP,
                 added_timestamp TIMESTAMP,
                 embedded_timestamp TIMESTAMP,
-                {Categories} TEXT,
-                {Scope} TEXT,
-                {Context} TEXT,
-                {Language} TEXT,
+                categories TEXT,
+                scope TEXT,
+                context TEXT,
+                language TEXT,
                 summary TEXT,
                 segments BLOB,
                 metadata TEXT,
                 deleted TIMESTAMP,
-                PRIMARY KEY({Source_unit_id}, {Source}, deleted)
+                PRIMARY KEY(source_unit_id, source, deleted)
             )
         """)
 
@@ -144,50 +145,51 @@ class SourceUnitDB(Cache):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
-                existing_record[Source],
-                existing_record[Source_unit_id],
+                existing_record['source'],
+                existing_record['source_unit_id'],
                 existing_record['uri'],
                 existing_record['created_by'],
                 existing_record['last_edited_by'],
                 existing_record['last_edited_timestamp'],
                 existing_record['added_timestamp'],
                 existing_record['embedded_timestamp'],
-                json.dumps(existing_record[Categories]),
-                existing_record[Scope],
-                existing_record[Context],
-                existing_record[Language],
+                json.dumps(existing_record['categories']),
+                existing_record['scope'],
+                existing_record['context'],
+                existing_record['language'],
                 existing_record['summary'],
                 pickle.dumps(existing_record['segments']),
                 json.dumps(existing_record['metadata'], sort_keys=True),
                 timestamp_str(datetime.now(utc)),
             ))
             self.conn.execute("DELETE FROM source_unit WHERE "
-                              f"{Source} = ? AND "
-                              f"{Source_unit_id} = ?",
+                              "source = ? AND "
+                              "source_unit_id = ?",
                               (source_unit_id, source))
             self.conn.commit()
 
     def add_or_update(self,
+                      source: str,
+                      source_unit_id: str,
                       uri: str,
                       created_by: str,
                       last_edited_by: str,
                       last_edited_timestamp: datetime,
                       segments: List[Segment],
+                      categories: Union[Dict[str, Any], str] = '[]',
+                      scope: str = '',
+                      context: str = '',
+                      language: str = '',
                       summary: str = '',
                       metadata: Dict = None,
-                      embedded_timestamp: datetime = None,
-                      **vector_db_fields):
+                      embedded_timestamp: datetime = None):
 
         source_unit_text = combine_segments(segments)
 
-        language = vector_db_fields.get(Language, '')
-
-        existing_record = self.get(vector_db_fields[Source],
-                                   vector_db_fields[Source_unit_id])
+        existing_record = self.get(source, source_unit_id)
         if existing_record:
             added_timestamp = existing_record['added_timestamp']
-            self.delete(vector_db_fields[Source],
-                        vector_db_fields[Source_unit_id])
+            self.delete(source, source_unit_id)
         else:
             added_timestamp = datetime.now(utc)
 
@@ -195,37 +197,37 @@ class SourceUnitDB(Cache):
             INSERT OR REPLACE INTO source_unit
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        self.conn.execute(query, (vector_db_fields[Source],
-                                  vector_db_fields[Source_unit_id],
-                                  T.validate_uri(uri),
-                                  created_by,
-                                  last_edited_by,
-                                  timestamp_str(last_edited_timestamp),
-                                  timestamp_str(added_timestamp),
-                                  timestamp_str(embedded_timestamp, default=None),
-                                  json.dumps(vector_db_fields.get(Categories, '')),
-                                  vector_db_fields.get(Scope, ''),
-                                  vector_db_fields.get(Context, ''),
-                                  language or guess_language(source_unit_text),
-                                  summary or self.summarize(source_unit_text),
-                                  pickle.dumps(segments),
-                                  json.dumps(metadata, sort_keys=True)))
+        self.conn.execute(query,
+                          (source,
+                           source_unit_id,
+                           T.validate_uri(uri),
+                           created_by,
+                           last_edited_by,
+                           timestamp_str(last_edited_timestamp),
+                           timestamp_str(added_timestamp),
+                           timestamp_str(embedded_timestamp, default=None),
+                           categories if isinstance(categories, str) else json.dumps(categories),
+                           scope,
+                           context,
+                           language or guess_language(source_unit_text),
+                           summary or self.summarize(source_unit_text),
+                           pickle.dumps(segments),
+                           json.dumps(metadata, sort_keys=True)))
         self.conn.commit()
-        return vector_db_fields[Source_unit_id]
+        return source_unit_id
 
     def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM source_unit WHERE "
-                       f"{Source}=? AND "
-                       f"{Source_unit_id}=?",
+                       "source=? AND "
+                       "source_unit_id=?",
                        (source, source_unit_id))
         out = timestamps_to_datetimes(cursor.fetchone())
         return out
 
     def get_by_uri(self, source: str, uri: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE uri=? AND "
-                       f"{Source}=?", (uri, source))
+        cursor.execute("SELECT * FROM source_unit WHERE uri=? AND source=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
     def get_unembedded(self) -> List[Dict[str, Any]]:
@@ -239,14 +241,14 @@ class SourceUnitDB(Cache):
         return [timestamps_to_datetimes(row) for row in rows]
 
     def flag_as_embedded(self, rows: List[Dict[str, Any]], now: datetime = None):
-        query = f"""
+        query = """
             UPDATE source_unit
             SET embedded_timestamp = ?
-            WHERE {Source} = ? AND {Source_unit_id} = ?
+            WHERE source = ? AND source_unit_id = ?
         """
         now = timestamp_str(now or datetime.now(utc))
         for row in rows:
-            self.conn.execute(query, (now, row[Source], row[Source_unit_id]))
+            self.conn.execute(query, (now, row['source'], row['source_unit_id']))
         self.conn.commit()
 
     def get_last_edited_timestamp(self,
@@ -261,7 +263,7 @@ class SourceUnitDB(Cache):
 
         row = cursor.fetchone()
         if row is not None:
-            return T.timestamp_as_utc(row['last_edited_timestamp'] + '+00:00')
+            return T.timestamp_as_utc(row['last_edited_timestamp'])
         return None
 
     def get_most_recent_last_edited_timestamp(self) -> Optional[Chunk]:
@@ -321,15 +323,15 @@ class SourceUnitDB(Cache):
         # Group by source_unit_id and source, taking only the first (latest) record for each group
         grouped_records = []
         for _, group in groupby(historical_records,
-                                key=lambda row: (row[Source_unit_id],
-                                                 row[Source])):
+                                key=lambda row: (row['source_unit_id'],
+                                                 row['source'])):
             grouped_records.append(next(group))
 
         # Step 3
-        all_records = {(row[Source_unit_id],
-                        row[Source]): row for row in current_records}
-        all_records.update({(row[Source_unit_id],
-                             row[Source]): row
+        all_records = {(row['source_unit_id'],
+                        row['source']): row for row in current_records}
+        all_records.update({(row['source_unit_id'],
+                             row['source']): row
                             for row in grouped_records})
 
         return list(all_records.values())
@@ -347,20 +349,19 @@ class ChunkDB:
         self.conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {self.table_name} (
           chunk_id TEXT,
-          {Source} TEXT,
-          {Source_unit_id} TEXT,
-          text TEXT,
+          source TEXT,
+          source_unit_id TEXT,
           vector BLOB,
           payload TEXT,
           vector_db_id TEXT,
           added_timestamp TIMESTAMP,
-          PRIMARY KEY(chunk_id, {Source}, {Source_unit_id}),
-          FOREIGN KEY({Source}, {Source_unit_id}) REFERENCES source_unit({Source}, {Source_unit_id})
+          PRIMARY KEY(chunk_id, source, source_unit_id),
+          FOREIGN KEY(source, source_unit_id) REFERENCES source_unit(source, source_unit_id)
         )
         """)
         self.conn.execute(f"""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
-        ON {self.table_name} ({Source}, {Source_unit_id})
+        ON {self.table_name} (source, source_unit_id)
         """)
 
     def add_or_update(self,
@@ -371,13 +372,12 @@ class ChunkDB:
         try:
             self.conn.executemany(f"""
                 INSERT OR REPLACE INTO {self.table_name}
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, [(chunk.chunk_id or str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
                    source,
                    source_unit_id,
-                   chunk.text,
                    pickle.dumps(chunk.vector),
-                   json.dumps(chunk.payload or {}),
+                   json.dumps(chunk.payload),
                    chunk.vector_db_id,
                    timestamp_str(now or datetime.now(utc)))
                   for chunk in chunks])
@@ -404,9 +404,8 @@ class ChunkDB:
         cursor = self.conn.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE chunk_id=?", (chunk_id,))
         row = cursor.fetchone()
-        return Chunk(row['text'],
-                     vector=pickle.loads(row['vector']),
-                     payload=json.dumps(row['payload']),
+        return Chunk(vector=pickle.loads(row['vector']),
+                     payload=Payload(**(json.loads(row['payload']))),
                      chunk_id=row['chunk_id'],
                      vector_db_id=row['vector_db_id']) if row else None
 
@@ -415,9 +414,8 @@ class ChunkDB:
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=? AND source_unit_id=?",
                        (source, source_unit_id))
         rows = cursor.fetchall()
-        return [Chunk(row['text'],
-                      vector=pickle.loads(row['vector']),
-                      payload=json.dumps(row['payload']),
+        return [Chunk(vector=pickle.loads(row['vector']),
+                      payload=Payload(**(json.loads(row['payload']))),
                       chunk_id=row['chunk_id'],
                       vector_db_id=row['vector_db_id'])
                 for row in rows]

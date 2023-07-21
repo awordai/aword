@@ -13,15 +13,6 @@ import aword.tools as T
 from aword.model.embedder import Embedder
 from aword.chunk import Chunk
 from aword.segment import Segment
-from aword.vector.fields import VectorDbFields
-
-Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Source = VectorDbFields.SOURCE.value
-Body = VectorDbFields.BODY.value
-Categories = VectorDbFields.CATEGORIES.value
-Scope = VectorDbFields.SCOPE.value
-Context = VectorDbFields.CONTEXT.value
-Language = VectorDbFields.LANGUAGE.value
 
 
 def make_store(collection_name: str,
@@ -76,18 +67,17 @@ class Store(ABC):
             # non normalized embeddings.
             chunks = embedder.get_embedded_chunks(segment.body)
             for chunk in chunks:
-                chunk.payload[Source] = source
-                chunk.payload[Source_unit_id] = source_unit_id
-                chunk.payload[Body] = chunk.text
-                chunk.payload[Categories] = categories
-                chunk.payload[Scope] = scope
-                chunk.payload[Context] = context
-                chunk.payload[Language] = segment.language or language
-                chunk.payload['headings'] = segment.headings
-                chunk.payload['created_by'] = segment.created_by
-                chunk.payload['last_edited_by'] = segment.last_edited_by
-                chunk.payload['last_edited_timestamp'] = segment.last_edited_timestamp
-                chunk.payload['metadata'] = segment.metadata
+                chunk.payload.source = source
+                chunk.payload.source_unit_id = source_unit_id
+                chunk.payload.categories = categories
+                chunk.payload.scope = scope
+                chunk.payload.context = context
+                chunk.payload.language = segment.language or language
+                chunk.payload.headings = segment.headings
+                chunk.payload.created_by = segment.created_by
+                chunk.payload.last_edited_by = segment.last_edited_by
+                chunk.payload.last_edited_timestamp = segment.last_edited_timestamp
+                chunk.payload.metadata = segment.metadata
 
                 to_upsert.append(chunk)
 
@@ -128,27 +118,27 @@ class QdrantStore(Store):
                                                distance=distance))
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.SOURCE_UNIT_ID.value,
+                                         field_name='source',
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.SOURCE.value,
+                                         field_name='source_unit_id',
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.CATEGORIES.value,
+                                         field_name='categories',
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.SCOPE.value,
+                                         field_name='scope',
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.CONTEXT.value,
+                                         field_name='context',
                                          field_schema="keyword")
 
         self.client.create_payload_index(collection_name=self.collection_name,
-                                         field_name=VectorDbFields.LANGUAGE.value,
+                                         field_name='language',
                                          field_schema="keyword")
 
     def count(self) -> int:
@@ -161,22 +151,23 @@ class QdrantStore(Store):
                       scopes: Union[List[str], str] = None,
                       contexts: Union[List[str], str] = None,
                       languages: Union[List[str], str] = None) -> models.Filter:
-        """There are three filter possibilities: source, categories,
-        scope and context. If more than one value comes for each, any
-        of the values should match. If more than one filter comes all
-        should be applied.
+        """The filter possibilities are: source, categories, scope and
+        context. If more than one value comes for each, any of the
+        values should match. If more than one filter comes all should
+        be applied.
+
         """
         where = {}
         if sources:
-            where[Source] = sources
+            where['source'] = sources
         if categories:
-            where[Categories] = categories
+            where['categories'] = categories
         if scopes:
-            where[Scope] = scopes
+            where['scope'] = scopes
         if contexts:
-            where[Context] = contexts
+            where['context'] = contexts
         if languages:
-            where[Language] = languages
+            where['language'] = languages
 
         conditions = []
         for key, value in where.items():
@@ -216,7 +207,7 @@ class QdrantStore(Store):
     def clean_source_unit(self, source_unit_id: str):
         self.client.delete(collection_name=self.collection_name,
                            points_selector=Filter(must=[
-                               FieldCondition(key=Source_unit_id,
+                               FieldCondition(key='source_unit_id',
                                               match=MatchValue(value=source_unit_id))]))
 
     def upsert_chunks(self, chunks: List[Chunk]) -> List[Chunk]:
@@ -228,15 +219,13 @@ class QdrantStore(Store):
         out = []
         points = []
         for chunk in chunks:
-            payload = chunk.payload.copy()
-            vector_db_id = make_id(payload.get(Source, '') + payload.get(Source_unit_id, ''),
-                                   chunk.text)
+            vector_db_id = make_id(chunk.payload.source + chunk.payload.source_unit_id,
+                                   chunk.payload.body)
             points.append(PointStruct(id=vector_db_id,
                                       vector=chunk.vector,
-                                      payload=payload))
+                                      payload=chunk.payload))
 
             out_chunk = chunk.copy()
-            out_chunk.payload = payload  # The copy
             out_chunk.vector_db_id = vector_db_id
             out.append(out_chunk)
 

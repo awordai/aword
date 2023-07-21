@@ -31,7 +31,7 @@ def test_oai_embedded_chunks(awd, resdir):
             oai_embedder = awd.get_embedder('text-embedding-ada-002')
             oai_chunks = oai_embedder.get_embedded_chunks(txt)
 
-            assert oai_chunks[1].text == (
+            assert oai_chunks[1].payload.body == (
                 'Pine trees are evergreen, coniferous resinous trees in the genus '
                 'Pinus. They are known for their distinctive pine cones and are '
                 'often associated with Christmas.\n'
@@ -59,7 +59,7 @@ def test_hf_embedded_chunks(awd, resdir):
             embedder = awd.get_embedder('multi-qa-mpnet-base-dot-v1')
             chunks = embedder.get_embedded_chunks(txt)
 
-            assert chunks[1].text == (
+            assert chunks[1].payload.body == (
                 '* * pine tree * * * overview pine trees are evergreen, coniferous resinous '
                 'trees in the genus pinus. they are known for their distinctive pine cones '
                 'and are often associated with christmas. * * * characteristics pine trees '

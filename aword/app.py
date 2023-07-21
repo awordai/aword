@@ -188,15 +188,6 @@ class Awd:
             processor.add_to_cache(self)
 
     def embed_and_store(self, collection_name: str = None, model_name: str = None):
-        from aword.vector.fields import VectorDbFields
-
-        Source = VectorDbFields.SOURCE.value
-        Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-        Categories = VectorDbFields.CATEGORIES.value
-        Scope = VectorDbFields.SCOPE.value
-        Context = VectorDbFields.CONTEXT.value
-        Language = VectorDbFields.LANGUAGE.value
-
         source_unit_cache = self.get_source_unit_cache()
         chunk_cache = self.get_chunk_cache(model_name)
 
@@ -206,18 +197,18 @@ class Awd:
         total_chunks = 0
         for source_unit in source_unit_cache.get_unembedded():
             now = datetime.now(utc)
-            print('...', source_unit[Source_unit_id])
+            print('...', source_unit['source_unit_id'])
             chunks = store.store_source_unit(embedder,
-                                             source=source_unit[Source],
-                                             source_unit_id=source_unit[Source_unit_id],
-                                             categories=source_unit[Categories],
-                                             scope=source_unit[Scope],
-                                             context=source_unit[Context],
-                                             language=source_unit[Language],
+                                             source=source_unit['source'],
+                                             source_unit_id=source_unit['source_unit_id'],
+                                             categories=source_unit['categories'],
+                                             scope=source_unit['scope'],
+                                             context=source_unit['context'],
+                                             language=source_unit['language'],
                                              segments=source_unit['segments'])
             source_unit_cache.flag_as_embedded([source_unit], now=now)
-            chunk_cache.add_or_update(source=source_unit[Source],
-                                      source_unit_id=source_unit[Source_unit_id],
+            chunk_cache.add_or_update(source=source_unit['source'],
+                                      source_unit_id=source_unit['source_unit_id'],
                                       chunks=chunks)
             print(f'    -> {len(chunks)} chunks')
             total_chunks += len(chunks)

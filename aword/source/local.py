@@ -11,15 +11,6 @@ from aword.source.parser import orgmode
 from aword.source.parser import markdown
 from aword.source.parser import plain
 
-from aword.vector.fields import VectorDbFields
-
-Source = VectorDbFields.SOURCE.value
-Source_unit_id = VectorDbFields.SOURCE_UNIT_ID.value
-Categories = VectorDbFields.CATEGORIES.value
-Scope = VectorDbFields.SCOPE.value
-Context = VectorDbFields.CONTEXT.value
-Language = VectorDbFields.LANGUAGE.value
-
 
 def add_to_cache(awd, only_in_directory=None):
     supported_extensions = ['org', 'md', 'txt', 'text']
@@ -74,20 +65,18 @@ def add_to_cache(awd, only_in_directory=None):
                             timestamp=file_modified_dt)
                         all_segments += segments
 
-                        source_unit_cache.add_or_update(**{
-                            'uri': T.file_to_uri(file_path),
-                            Source: full_source_name,
-                            Source_unit_id: file_path,
-                            Categories: categories,
-                            Scope: scope,
-                            Context: context,
-                            Language: language,
-                            'created_by': author,
-                            'last_edited_by': author,
-                            'last_edited_timestamp': file_modified_dt,
-                            'segments': segments,
-                            'metadata': {'directory': directory}
-                        })
+                        source_unit_cache.add_or_update(source=full_source_name,
+                                                        source_unit_id=file_path,
+                                                        uri=T.file_to_uri(file_path),
+                                                        categories=categories,
+                                                        scope=scope,
+                                                        context=context,
+                                                        language=language,
+                                                        created_by=author,
+                                                        last_edited_by=author,
+                                                        last_edited_timestamp=file_modified_dt,
+                                                        segments=segments,
+                                                        metadata={'directory': directory})
                     else:
                         print('  - ignoring %s with last_stored_edit_dt %s' %
                               (file_path, last_stored_edit_dt))
