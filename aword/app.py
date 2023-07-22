@@ -32,6 +32,7 @@ class Awd:
         self.collection_name = collection_name
         self._embedder = {}
         self._personas = {}
+        self._respondents = {}
         self._store = {}
         self._source_unit_cache = None
         self._chunk_cache = {}
@@ -101,6 +102,31 @@ class Awd:
             self._embedder[model_name] = make_embedder({**model_config, **embedding_config})
 
         return self._embedder[model_name]
+
+    def get_respondent(self, respondent_name: str):
+        if respondent_name not in self._respondents:
+            respondents_config = self.get_json_config('respondents')
+            if respondent_name not in respondents_config:
+                raise RuntimeError(f'No configuration found for respondent {respondent_name}')
+            config = respondents_config[respondent_name].copy()
+
+            if 'system_prompt' not in config:
+                if 'system_prompt_file' not in config:
+                    raise RuntimeError(f'Need a system prompt in the config of {respondent_name}')
+
+                with open(config['system_prompt_file'], encoding='utf-8') as fin:
+                    config['system_prompt'] = fin.read()
+
+            if 'user_prompt_preface' not in config and 'user_prompt_preface_file' in config:
+                with open(config['user_prompt_preface_file'], encoding='utf-8') as fin:
+                    config['user_prompt_preface'] = fin.read()
+
+            from aword.model.respondent import make_respondent
+
+            model_config = self.get_json_config('models')[config['model_name']]
+            self._respondents[respondent_name] = make_respondent({**model_config, **config})
+
+        return self._respondents[respondent_name]
 
     def get_persona(self, persona_name: str):
         if persona_name not in self._personas:
