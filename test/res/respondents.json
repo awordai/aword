@@ -24,5 +24,30 @@
         "required": ["summary", "language"]
       }
     }
+  },
+  "corrector": {
+    "system_prompt": "You are a proof-reader. You will be given a text that can be poorly written, maybe with bad punctuation and wrong capitalization.  The text can also contain proper names and dates. Your task is to correct the grammar, punctuation, and capitalization of the text, and to convert the text into a template where proper names are replaced by [name], names of places are replaced by [place], dates are replaced by [date], and times are replaced by [time].",
+    "user_prompt_preface": "Correct the following text, and make it into a template:\n\n",
+    "model_name": "gpt-3.5-turbo-0613",
+    "provider": "openai",
+    "call_function": {
+      "name": "store_template",
+      "description": "Store a template derived from a corrected version of the user text",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "string",
+            "description": "A template derived from the text."
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en", "es", "other"],
+            "description": "If the text is in English set to 'en'. If the text is in Spanish set to 'es'. Otherwise set to 'other'."
+          }
+        },
+        "required": ["template", "language"]
+      }
+    }
   }
 }
