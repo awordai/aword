@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+"""Parse and cache notion pages.
+"""
 import time
 from typing import Dict, List, Tuple
 import logging
@@ -293,6 +294,10 @@ def process_page(page_id: str,
         'last_edited_time', page['created_time']))
 
     last_stored_edit_dt = source_unit_cache.get_last_edited_timestamp(SourceName, short_page_id)
+    logger.debug('last_stored_edit_dt (%s, %s): %s',
+                 SourceName,
+                 short_page_id,
+                 last_stored_edit_dt)
 
     if last_stored_edit_dt is None or last_edited_dt > last_stored_edit_dt:
         created_by, last_edited_by, last_edited_by_id = fetch_page_authors(page)
@@ -305,17 +310,18 @@ def process_page(page_id: str,
                                   timestamp=last_edited_dt,
                                   content=page_content)
 
-            source_unit_cache.add_or_update(source=SourceName,
-                                            source_unit_id=short_page_id,
-                                            uri=page['url'],
-                                            categories=categories,
-                                            scope=scope,
-                                            context=context,
-                                            language=language,
-                                            created_by=created_by,
-                                            last_edited_by=last_edited_by,
-                                            last_edited_timestamp=last_edited_dt,
-                                            segments=segments)
+            if segments:
+                source_unit_cache.add_or_update(source=SourceName,
+                                                source_unit_id=short_page_id,
+                                                uri=page['url'],
+                                                categories=categories,
+                                                scope=scope,
+                                                context=context,
+                                                language=language,
+                                                created_by=created_by,
+                                                last_edited_by=last_edited_by,
+                                                last_edited_timestamp=last_edited_dt,
+                                                segments=segments)
         except:
             logger.error('Failed processing page %s', page_id)
 

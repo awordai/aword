@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+"""Have conversations with a persona.
+"""
 import string
 from typing import Dict
 

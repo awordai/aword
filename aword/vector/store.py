@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import os
 import uuid
 from typing import List, Dict, Union
 from abc import ABC, abstractmethod
@@ -9,7 +8,6 @@ from qdrant_client import models
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointStruct
 
-import aword.tools as T
 from aword.model.embedder import Embedder
 from aword.chunk import Chunk
 from aword.segment import Segment

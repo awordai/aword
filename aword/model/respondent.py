@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+"""Ask questions to a respondent.
+"""
 import string
 from typing import Dict
 

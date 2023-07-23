@@ -4,6 +4,7 @@ import pickle
 import json
 from itertools import groupby
 import uuid
+import logging
 
 import sqlite3
 from sqlite3 import Error
@@ -12,6 +13,7 @@ from typing import Optional, Dict, Any, List, Union
 
 from pytz import utc
 
+import aword.errors as E
 import aword.tools as T
 from aword.segment import Segment
 from aword.chunk import Payload, Chunk
@@ -32,12 +34,15 @@ def make_chunk_cache(**kw):
 def get_connection(fname=None):
     global DbConnection
     if DbConnection is None:
+        logger = logging.getLogger(__name__)
         try:
-            DbConnection = sqlite3.connect(':memory:' if fname is None
-                                           else fname)
+            connect_to = ':memory:' if fname is None else fname
+            DbConnection = sqlite3.connect(connect_to)
             DbConnection.row_factory = sqlite3.Row
-        except sqlite3.Error as e:
-            print(e)
+            logger.info('Created sqlite connection to %s', connect_to)
+        except sqlite3.Error as exc:
+            logger.error('Failed trying to connect to sqlite database %s', fname)
+            raise E.AwordError(f'Cannot connect to sqlite database {fname}') from exc
     return DbConnection
 
 
@@ -76,6 +81,7 @@ class SourceUnitDB(Cache):
         super().__init__(summarizer)
 
         self.conn = get_connection(fname)
+        self.logger = logging.getLogger(__name__)
         self.create_table()
         self.create_history_table()
         self.fname = fname
@@ -101,18 +107,24 @@ class SourceUnitDB(Cache):
                 PRIMARY KEY(source_unit_id, source)
             )
         """)
+        self.logger.info('Attempted source_unit table creation')
 
     def reset_tables(self, only_in_memory=True):
+        logger = logging.getLogger(__name__)
+
         if not (self.fname is None and only_in_memory):
-            print('Refusing to drop persistent tables without `only_in_memory` argument')
+            logger.warning('Refusing to drop persistent tables without `only_in_memory` argument')
             return
         try:
             self.conn.execute("DROP TABLE IF EXISTS source_unit")
             self.conn.execute("DROP TABLE IF EXISTS source_unit_history")
+            self.logger.info('Dropped tables source_unit and source_unit_history')
             self.create_table()
             self.create_history_table()
         except Error as e:
-            print(e)
+            logger.error('Failed trying to create source_unit and source_unit_history tables')
+            raise E.AwordError('Failed trying to create source_unit and '
+                               'source_unit_history tables') from e
 
     def create_history_table(self):
         self.conn.execute("""
@@ -136,6 +148,7 @@ class SourceUnitDB(Cache):
                 PRIMARY KEY(source_unit_id, source, deleted)
             )
         """)
+        self.logger.info('Attempted source_unit_history table creation')
 
     def delete(self, source: str, source_unit_id: str):
         existing_record = self.get(source, source_unit_id)
@@ -165,8 +178,12 @@ class SourceUnitDB(Cache):
             self.conn.execute("DELETE FROM source_unit WHERE "
                               "source = ? AND "
                               "source_unit_id = ?",
-                              (source_unit_id, source))
+                              (source, source_unit_id))
             self.conn.commit()
+            self.logger.info('Deleted record (%s, %s)', source, source_unit_id)
+        else:
+            self.logger.info('Attempting to delete non-existing record (%s, %s)',
+                             source, source_unit_id)
 
     def add_or_update(self,
                       source: str,
@@ -181,8 +198,7 @@ class SourceUnitDB(Cache):
                       context: str = '',
                       language: str = '',
                       summary: str = '',
-                      metadata: Dict = None,
-                      embedded_timestamp: datetime = None):
+                      metadata: Dict = None):
 
         source_unit_text = combine_segments(segments)
 
@@ -192,6 +208,9 @@ class SourceUnitDB(Cache):
             self.delete(source, source_unit_id)
         else:
             added_timestamp = datetime.now(utc)
+
+        # Make sure that a new source unit will be unembedded
+        embedded_timestamp = None
 
         query = """
             INSERT OR REPLACE INTO source_unit
@@ -214,6 +233,8 @@ class SourceUnitDB(Cache):
                            pickle.dumps(segments),
                            json.dumps(metadata, sort_keys=True)))
         self.conn.commit()
+        self.logger.info('Inserted or replaced in source_unit (%s, %s), last_edited_timestamp %s',
+                         source, source_unit_id, timestamp_str(last_edited_timestamp))
         return source_unit_id
 
     def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
@@ -263,7 +284,9 @@ class SourceUnitDB(Cache):
 
         row = cursor.fetchone()
         if row:
+            self.logger.debug('Found row for (%s, %s)', source, source_unit_id)
             return T.timestamp_as_utc(row['last_edited_timestamp'])
+        self.logger.debug('Could not find row for (%s, %s)', source, source_unit_id)
         return None
 
     def get_most_recent_last_edited_timestamp(self) -> Optional[Chunk]:
@@ -276,6 +299,11 @@ class SourceUnitDB(Cache):
         return T.timestamp_as_utc(
             row['last_edited_timestamp'] + ('+00:00' if '+' not in row['last_edited_timestamp']
                                             else ''))
+
+    def get_by_source(self, source: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM source_unit WHERE source = ?", (source,))
+        return [timestamps_to_datetimes(dict(row)) for row in cursor.fetchall()]
 
     def get_history(self, source: str, source_unit_id: str) -> List[Dict[str, Any]]:
         """Returns the history of a source unit.
@@ -342,6 +370,8 @@ class ChunkDB:
         self.conn = get_connection(fname)
         self.table_name = 'chunk_' + model_name.replace('-', '_')
 
+        self.logger = logging.getLogger(__name__)
+
         self.create_table()
         self.fname = fname
 
@@ -359,31 +389,38 @@ class ChunkDB:
           FOREIGN KEY(source, source_unit_id) REFERENCES source_unit(source, source_unit_id)
         )
         """)
-        self.conn.execute(f"""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_{self.table_name}_chunk_id
-        ON {self.table_name} (source, source_unit_id)
-        """)
+        self.logger.info('Attempted %s table creation', self.table_name)
 
-    def add_or_update(self,
-                      source: str,
-                      source_unit_id: str,
-                      chunks: List[Chunk],
-                      now=None):
-        try:
-            self.conn.executemany(f"""
-                INSERT OR REPLACE INTO {self.table_name}
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, [(chunk.chunk_id or str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
-                   source,
-                   source_unit_id,
-                   pickle.dumps(chunk.vector),
-                   json.dumps(chunk.payload),
-                   chunk.vector_db_id,
-                   timestamp_str(now or datetime.now(utc)))
-                  for chunk in chunks])
-            self.conn.commit()
-        except sqlite3.Error as e:
-            print(e)
+    def add(self,
+            source: str,
+            source_unit_id: str,
+            chunks: List[Chunk],
+            now=None):
+        self.conn.executemany(f"""
+        INSERT INTO {self.table_name}
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, [(chunk.chunk_id or str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
+               source,
+               source_unit_id,
+               pickle.dumps(chunk.vector),
+               json.dumps(chunk.payload),
+               chunk.vector_db_id,
+               timestamp_str(now or datetime.now(utc)))
+              for chunk in chunks])
+        self.conn.commit()
+        self.logger.info('Inserted %d chunks in %s (%s, %s)',
+                         len(chunks),
+                         self.table_name,
+                         source,
+                         source_unit_id)
+
+    def delete_source_unit(self, source: str, source_unit_id: str):
+        self.conn.execute(f"DELETE FROM {self.table_name} WHERE "
+                          "source = ? AND "
+                          "source_unit_id = ?",
+                          (source, source_unit_id))
+        self.conn.commit()
+        self.logger.info('Deleted source unit chunks (%s, %s)', source, source_unit_id)
 
     def get_most_recent_addition_datetime(self) -> Optional[Chunk]:
         """We can use this as the timestamp for
@@ -409,6 +446,26 @@ class ChunkDB:
                      chunk_id=row['chunk_id'],
                      vector_db_id=row['vector_db_id']) if row else None
 
+    def get_all(self) -> List[Chunk]:
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {self.table_name}")
+        rows = cursor.fetchall()
+        return [Chunk(vector=pickle.loads(row['vector']),
+                      payload=Payload(**(json.loads(row['payload']))),
+                      chunk_id=row['chunk_id'],
+                      vector_db_id=row['vector_db_id'])
+                for row in rows]
+
+    def get_by_source(self, source: str) -> List[Chunk]:
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=?", (source,))
+        rows = cursor.fetchall()
+        return [Chunk(vector=pickle.loads(row['vector']),
+                      payload=Payload(**(json.loads(row['payload']))),
+                      chunk_id=row['chunk_id'],
+                      vector_db_id=row['vector_db_id'])
+                for row in rows]
+
     def get_by_source_unit(self, source: str, source_unit_id: str) -> List[Chunk]:
         cursor = self.conn.cursor()
         cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=? AND source_unit_id=?",
@@ -429,4 +486,5 @@ class ChunkDB:
             """, (source, source_unit_id))
             self.conn.commit()
         except sqlite3.Error as e:
-            print(e)
+            raise E.AwordError('Failed trying to resent vector_db_id by source unit '
+                               f'({source}, {source_unit_id})') from e

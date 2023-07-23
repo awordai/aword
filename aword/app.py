@@ -269,7 +269,7 @@ class Awd:
         return self._chunk_cache[model_name]
 
     def update_cache(self):
-        sources = ['local']
+        sources = ['local', 'notion']
         for source_name in sources:
             processor = import_module(f'aword.source.{source_name}')
             processor.add_to_cache(self)
@@ -284,7 +284,9 @@ class Awd:
         total_chunks = 0
         for source_unit in source_unit_cache.get_unembedded():
             now = datetime.now(utc)
-            self.logger.info('...%s', str(source_unit['source_unit_id']))
+            self.logger.info('Embedding and storing source unit (%s, %s)',
+                             str(source_unit['source']),
+                             str(source_unit['source_unit_id']))
             chunks = store.store_source_unit(embedder,
                                              source=source_unit['source'],
                                              source_unit_id=source_unit['source_unit_id'],
@@ -294,16 +296,32 @@ class Awd:
                                              language=source_unit['language'],
                                              segments=source_unit['segments'])
             source_unit_cache.flag_as_embedded([source_unit], now=now)
-            chunk_cache.add_or_update(source=source_unit['source'],
-                                      source_unit_id=source_unit['source_unit_id'],
-                                      chunks=chunks)
-            self.logger.info('    -> %d chunks', len(chunks))
+
+            # First remove the chunks for this source unit. Otherwise
+            # old chunks will be left if this is an edit.
+            chunk_cache.delete_source_unit(source=source_unit['source'],
+                                           source_unit_id=source_unit['source_unit_id'])
+            chunk_cache.add(source=source_unit['source'],
+                            source_unit_id=source_unit['source_unit_id'],
+                            chunks=chunks)
             total_chunks += len(chunks)
 
         self.logger.info('Added %d chunks', total_chunks)
 
 
-def main():
+def add_args(parser):
+    parser.add_argument('--embed-cache',
+                        help=('Chunks and embeds the unembedded segments in the cache, and '
+                              'stores them in the vector database'),
+                        action='store_true')
+
+
+def main(awd, args):
+    if args['embed_cache']:
+        awd.embed_and_store()
+
+
+def app():
     import argparse
 
     core_arguments = {
@@ -352,15 +370,25 @@ def main():
     # These imports happen after the logging has been
     # configured. Otherwise they could get an unconfigured logger.
     import aword.source.notion
+    import aword.source.local
     import aword.model.persona
     import aword.model.respondent
+    import aword.cache.cache
     commands = {
+        'notion': aword.source.notion,
+        'local': aword.source.local,
         'chat': aword.model.persona,
         'ask': aword.model.respondent,
-        'cache-notion': aword.source.notion
+        'cache': aword.cache.cache
     }
 
     subparsers = parser.add_subparsers(title='Commands')
+    subparser = subparsers.add_parser('app',
+                                      help='Main application.',
+                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_args(subparser)
+    subparser.set_defaults(func=main)
+
     for command, module in commands.items():
         subparser = subparsers.add_parser(command,
                                           help=module.__doc__,
@@ -392,4 +420,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    app()

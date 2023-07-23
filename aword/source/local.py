@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+"""Parse and cache local documents.
+"""
 import os
 from datetime import datetime
 import socket
@@ -56,7 +57,7 @@ def add_to_cache(awd: Awd,
                         full_source_name, file_path)
 
                     if last_stored_edit_dt is None or file_modified_dt > last_stored_edit_dt:
-                        print('  + parsing', file_path)
+                        awd.logger.info('Parsing', file_path)
                         uri = T.file_to_uri(file_path)
                         parser_fn = parsers[file_extension]
                         segments = parser_fn(
@@ -79,17 +80,18 @@ def add_to_cache(awd: Awd,
                                                         segments=segments,
                                                         metadata={'directory': directory})
                     else:
-                        print('  - ignoring %s with last_stored_edit_dt %s' %
-                              (file_path, last_stored_edit_dt))
+                        awd.logger.info('Ignoring %s with last_stored_edit_dt %s',
+                                        file_path, last_stored_edit_dt)
 
     return all_segments
 
 
-def main():
-    added = add_to_cache(Awd())
-    print('Added to cache:')
-    print('  ' + '\n  '.join([e.uri for e in added]))
+def add_args(parser):
+    parser.add_argument('--add-to-cache',
+                        action='store_true',
+                        help='Add local documents to the cache')
 
 
-if __name__ == "__main__":
-    main()
+def main(awd, args):
+    if args['add_to_cache']:
+        add_to_cache(awd)
