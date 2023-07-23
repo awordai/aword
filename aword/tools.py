@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 import datetime
 from typing import Dict, List, Union
 
 import urllib
 import urllib.request
-
-from dotenv import load_dotenv
-
-
-def load_environment():
-    load_dotenv('.env.test' if 'pytest' in sys.argv[0] else '.env')
 
 
 def timestamp_as_utc(timestamp: Union[datetime.datetime, str] = None) -> datetime.datetime:

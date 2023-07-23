@@ -1,35 +1,59 @@
 # -*- coding: utf-8 -*-
+"""Entry point to the Aword set of tools.
+"""
 
 import os
 import json
+import logging
 import configparser
 from datetime import datetime
 from importlib import import_module
 from typing import Dict, List, Union
 
+from dotenv import load_dotenv
 from pytz import utc
 
-
-def find_config(fname):
-    config_locations = [
-        fname,
-        os.path.join(os.environ.get('AWORD_CONFIG', ''), fname),
-        os.path.join(os.path.expanduser('~/.aword'), fname),
-        # TODO: this should be packaged and shipped.  Maybe move to poetry
-        os.path.join(os.path.dirname(__file__), '../res', fname)  # repository
-    ]
-
-    config_path = next((path for path in config_locations
-                        if path and os.path.isfile(path)), None)
-    return config_path
+import aword.errors as E
 
 
 class Awd:
 
-    def __init__(self, collection_name=None):
+    def __init__(self,
+                 environment_name: str,
+                 config_dir: str = None,
+                 collection_name: str = None):
+        self.config_dir = config_dir
+        self.environment_name = environment_name
+
+        self.logger = logging.getLogger('aword')
+        env_file = '.env.' + self.environment_name
+        if os.path.exists(env_file):
+            self.logger.info('Loading env file %s', env_file)
+            load_dotenv(env_file)
+        else:
+            self.logger.info('Not found env file %s', env_file)
+
+        self.environment = {
+            'TESTING': '',
+            'PRODUCTION': '',
+            'CONFIG_DIR': '',
+            'OPENAI_API_KEY': '',
+            'CROWDDEV_TENANT_ID': '',
+            'CROWDDEV_API_KEY': '',
+            'LINEAR_API_KEY': '',
+            'NOTION_API_KEY': '',
+            'SLACK_BOT_TOKEN': '',
+            'QDRANT_API_KEY': ''
+        }
+        for env_name, env_val in os.environ.items():
+            # Environment variables are as above but with an AWORD_ prefix
+            if env_name.startswith('AWORD_'):
+                self.environment[env_name[6:]] = env_val
+
         self.config = {}
         self.json_configs = {}
         self.collection_name = collection_name
+
         self._embedder = {}
         self._personas = {}
         self._respondents = {}
@@ -37,9 +61,45 @@ class Awd:
         self._source_unit_cache = None
         self._chunk_cache = {}
 
+    def getenv(self, varname):
+        return self.environment.get(varname.upper(), '')
+
+    def is_testing(self) -> bool:
+        return self.environment['TESTING'] != ''
+
+    def is_production(self) -> bool:
+        return self.environment['PRODUCTION'] != ''
+
+    def find_config(self, fname):
+        if self.config_dir is not None:
+            full_fname = os.path.join(self.config_dir, fname)
+            if os.path.exists(full_fname):
+                self.logger.info('Config file %s', full_fname)
+                return full_fname
+
+            raise E.AwordError(f'Cannot find config file {full_fname}')
+
+        config_locations = [
+            fname,
+            os.path.join(self.environment['CONFIG_DIR'], fname),
+            os.path.join(os.path.expanduser('~/.aword'), fname),
+            # TODO: this should be packaged and shipped.
+            os.path.join(os.path.dirname(__file__), '../res', fname)  # repository
+        ]
+
+        config_path = next((path for path in config_locations
+                            if path and os.path.exists(path)), None)
+
+        if config_path is None:
+            raise E.AwordError('Cannot find a config file')
+
+        self.logger.info('Found config file %s', config_path)
+
+        return config_path
+
     def get_json_config(self, config_name: str) -> Dict:
         if not config_name in self.json_configs:
-            config_path = find_config(config_name + '.json')
+            config_path = self.find_config(config_name + '.json')
 
             if config_path is None:
                 self.json_configs[config_name] = {}
@@ -67,7 +127,7 @@ class Awd:
         if not self.config:
             config = configparser.ConfigParser()
 
-            config_path = find_config('config.ini')
+            config_path = self.find_config('config.ini')
 
             if config_path is None:
                 raise FileNotFoundError('No configuration file found.')
@@ -99,7 +159,7 @@ class Awd:
             from aword.model.embedder import make_embedder
 
             model_config = self.get_json_config('models').get(embedding_config['model_name'], {})
-            self._embedder[model_name] = make_embedder({**model_config, **embedding_config})
+            self._embedder[model_name] = make_embedder(self, {**model_config, **embedding_config})
 
         return self._embedder[model_name]
 
@@ -124,7 +184,7 @@ class Awd:
             from aword.model.respondent import make_respondent
 
             model_config = self.get_json_config('models')[config['model_name']]
-            self._respondents[respondent_name] = make_respondent({**model_config, **config})
+            self._respondents[respondent_name] = make_respondent(self, {**model_config, **config})
 
         return self._respondents[respondent_name]
 
@@ -149,7 +209,7 @@ class Awd:
             from aword.model.persona import make_persona
 
             model_config = self.get_json_config('models')[config['model_name']]
-            self._personas[persona_name] = make_persona({**model_config, **config})
+            self._personas[persona_name] = make_persona(self, {**model_config, **config})
 
         return self._personas[persona_name]
 
@@ -171,7 +231,8 @@ class Awd:
             from aword.vector.store import make_store
 
             embedding_config = self.get_config('embedding')
-            self._store[collection_name] = make_store(collection_name,
+            self._store[collection_name] = make_store(self,
+                                                      collection_name,
                                                       {**vector_config, **embedding_config})
 
         return self._store[collection_name]
@@ -223,7 +284,7 @@ class Awd:
         total_chunks = 0
         for source_unit in source_unit_cache.get_unembedded():
             now = datetime.now(utc)
-            print('...', source_unit['source_unit_id'])
+            self.logger.info('...%s', str(source_unit['source_unit_id']))
             chunks = store.store_source_unit(embedder,
                                              source=source_unit['source'],
                                              source_unit_id=source_unit['source_unit_id'],
@@ -236,7 +297,97 @@ class Awd:
             chunk_cache.add_or_update(source=source_unit['source'],
                                       source_unit_id=source_unit['source_unit_id'],
                                       chunks=chunks)
-            print(f'    -> {len(chunks)} chunks')
+            self.logger.info('    -> %d chunks', len(chunks))
             total_chunks += len(chunks)
 
-        print(f'Added {total_chunks} chunks')
+        self.logger.info('Added %d chunks', total_chunks)
+
+
+def main():
+    import argparse
+    from aword.logger import configure_logging
+    import aword.source.notion
+    import aword.model.persona
+    import aword.model.respondent
+
+    core_arguments = {
+        ('-v', '--verbose'): {'help': 'Enable info logs.',
+                              'action': 'store_true'},
+        ('-d', '--debug'): {'help': 'Enable debug logs.',
+                            'action': 'store_true'},
+        ('-e', '--environment'): {'help': ('Environment name. If set, for example, to test '
+                                           'the file .env.test will be loaded if existing.'),
+                                  'type': str,
+                                  'default': 'dev'},
+        ('-L', '--error-logs-dir'): {'help': 'Directory for the error logs.',
+                                     'type': str,
+                                     'default': 'logs'},
+        ('-C', '--config-dir'): {'help': ('Directory with the configuration files. If present '
+                                          'it will not attempt to search for them in the '
+                                          'default places (the value of the AWORD_CONFIG_DIR '
+                                          'environment variable and the ~/.aword folder)'),
+                                 'type': str}
+    }
+
+    parser_config = argparse.ArgumentParser(add_help=False)
+
+    for argument, options in core_arguments.items():
+        parser_config.add_argument(*argument, **options)
+
+    global_args, cmdline = parser_config.parse_known_args()
+
+    configure_logging(debug=global_args.debug,
+                      silent=not global_args.verbose,
+                      error_logs_dir=global_args.error_logs_dir)
+
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     allow_abbrev=True)
+
+    # These three are here only for the help.  They are captured by the previous
+    # command-line parsing (required by the config) so will never reach this point.
+    # The previous one cannot have help, otherwise the help all the coming arguments
+    # in the commands would never be shown.
+    for argument, options in core_arguments.items():
+        parser.add_argument(*argument, **options)
+
+    awd = Awd(environment_name=global_args.environment,
+              config_dir=global_args.config_dir)
+
+    commands = {
+        'chat': aword.model.persona,
+        'ask': aword.model.respondent,
+        'cache-notion': aword.source.notion
+    }
+
+    subparsers = parser.add_subparsers(title='Commands')
+    for command, module in commands.items():
+        subparser = subparsers.add_parser(command,
+                                          help=module.__doc__,
+                                          formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        module.add_args(subparser)
+        subparser.set_defaults(func=module.main)
+
+    command = cmdline[0]
+    cmdline_args = cmdline[1:]
+
+    args, unknown = parser.parse_known_args([command] + cmdline_args)
+    if unknown:
+        raise RuntimeError('error: unrecognized arguments: ' + str(unknown))
+
+    command_function = args.func
+
+    # We want to deal with a dictionary, not a Namespace object.
+    dict_args = vars(args)
+
+    # Remove the arguments that we don't want used by the command function
+    dict_args.pop('func')
+    for argument in core_arguments.keys():
+        dict_args.pop(argument[1].replace('--', '').replace('-', '_'))
+    dict_args['mode'] = command
+
+    command_function(awd, dict_args)
+
+
+if __name__ == '__main__':
+    main()

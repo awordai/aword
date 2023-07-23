@@ -6,13 +6,14 @@ import socket
 from pytz import utc
 
 import aword.tools as T
-
+from aword.app import Awd
 from aword.source.parser import orgmode
 from aword.source.parser import markdown
 from aword.source.parser import plain
 
 
-def add_to_cache(awd, only_in_directory=None):
+def add_to_cache(awd: Awd,
+                 only_in_directory: bool = None):
     supported_extensions = ['org', 'md', 'txt', 'text']
 
     parsers = {
@@ -85,7 +86,6 @@ def add_to_cache(awd, only_in_directory=None):
 
 
 def main():
-    from aword.app import Awd
     added = add_to_cache(Awd())
     print('Added to cache:')
     print('  ' + '\n  '.join([e.uri for e in added]))

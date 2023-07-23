@@ -8,11 +8,11 @@ def combine_segments(segments):
     return '\n\n'.join([str(segment) for segment in segments])
 
 
-def guess_language(source_unit_text):
+def guess_language(source_unit_text, default=''):
     try:
         return langdetect.detect(source_unit_text)
     except:
-        return 'en'
+        return default
 
 
 class Cache(ABC):

@@ -3,14 +3,15 @@
 import string
 from typing import Dict
 
+
 from aword.apis import oai
 
 
-def make_persona(config: Dict):
+def make_persona(awd, config: Dict):
     provider = config.get('provider', 'openai')
 
     if provider == 'openai':
-        return OAIPersona(**config)
+        return OAIPersona(awd, **config)
 
     raise ValueError(f"Unknown model provider '{provider}'")
 
@@ -18,10 +19,12 @@ def make_persona(config: Dict):
 class OAIPersona:
 
     def __init__(self,
+                 awd,
                  model_name: str,
                  system_prompt: str,
                  user_prompt_preface: str = '',
                  **params):
+        oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
         self.model_name = model_name
         self.params = params
         self.system_prompt = string.Template(system_prompt).substitute(params)
@@ -36,11 +39,14 @@ class OAIPersona:
                         user_prompt=self.user_prompt_preface + text)
 
 
-def main():
-    import sys
-    from aword.app import Awd
+def add_args(parser):
+    import argparse
+    parser.add_argument('persona', help='Persona')
+    parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
 
-    persona_name = sys.argv[1].replace('@', '')
-    question = ' '.join(sys.argv[2:])
-    persona = Awd().get_persona(persona_name)
+
+def main(awd, args):
+    persona_name = args['persona'].replace('@', '')
+    question = ' '.join(args['question'])
+    persona = awd.get_persona(persona_name)
     print(persona.ask(question))

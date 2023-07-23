@@ -15,12 +15,13 @@ from aword.chunk import Chunk
 from aword.segment import Segment
 
 
-def make_store(collection_name: str,
+def make_store(awd,
+               collection_name: str,
                config: Dict):
     provider = config.get('provider', 'qdrant')
     if provider == 'qdrant':
         # collection_name can come in the config, overriding it if so.
-        return QdrantStore(**{**config, **{'collection_name': collection_name}})
+        return QdrantStore(awd, **{**config, **{'collection_name': collection_name}})
 
     raise ValueError(f'Unknown vector store provider {provider}')
 
@@ -88,6 +89,7 @@ class Store(ABC):
 class QdrantStore(Store):
 
     def __init__(self,
+                 awd,
                  collection_name,
                  local_db: str = None,
                  url: str = None,
@@ -99,8 +101,7 @@ class QdrantStore(Store):
         if url:
             client_pars = {'url': url}
             if 'localhost' not in url and '127.0.0' not in url:
-                T.load_environment()
-                client_pars['api_key'] = os.environ['QDRANT_API_KEY']
+                client_pars['api_key'] = awd.getenv('QDRANT_API_KEY')
         elif local_db:
             client_pars = {'path': local_db}
         else:

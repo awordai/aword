@@ -1,18 +1,10 @@
 {
   "notion": {
-    "databases": [
-      {
-        "id": "89d19764606c42d7b061e28c6c90c469",
-        "doc": "Lord of the Rings",
-        "category": "historical",
-        "scope": "confidential"
-      }
-    ],
     "pages": [
       {
         "id": "7c1003c6426146a2ae485e8e3bfe600b",
         "doc": "Notion test pages",
-        "category": "historical"
+        "categories": ["historical"]
       }
     ]
   },
@@ -21,7 +13,7 @@
       "directory": "test/res/local",
       "extensions": ["md", "org", "txt"],
       "author": "unknown",
-      "category": "historical",
+      "categories": ["historical"],
       "scope": "confidential"
     },
     {

@@ -176,7 +176,7 @@ class SourceUnitDB(Cache):
                       last_edited_by: str,
                       last_edited_timestamp: datetime,
                       segments: List[Segment],
-                      categories: Union[Dict[str, Any], str] = '[]',
+                      categories: Union[List[str], str] = '[]',
                       scope: str = '',
                       context: str = '',
                       language: str = '',
@@ -262,7 +262,7 @@ class SourceUnitDB(Cache):
             """, (source_unit_id, source))
 
         row = cursor.fetchone()
-        if row is not None:
+        if row:
             return T.timestamp_as_utc(row['last_edited_timestamp'])
         return None
 

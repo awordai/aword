@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import os
 import json
 from typing import List, Any, Dict
 
@@ -10,7 +9,6 @@ import tiktoken
 from tenacity import retry, wait_random_exponential
 from tenacity import stop_after_attempt, retry_if_not_exception_type
 
-import aword.tools as T
 import aword.errors as E
 
 
@@ -18,13 +16,12 @@ GPT_MODEL = "gpt-3.5-turbo-0613"
 Api_loaded = False
 
 
-def ensure_api():
+def ensure_api(api_key):
     global Api_loaded
     if not Api_loaded:
-        T.load_environment()
-        api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            raise RuntimeError('Missing openai api key in OPENAI_API_KEY')
+            raise E.AwordError('Cannot find an openai key in the environment, try setting '
+                               'the AWORD_OPENAI_KEY environment variable')
         openai.api_key = api_key
         Api_loaded = True
 
@@ -34,7 +31,6 @@ def ensure_api():
        retry=retry_if_not_exception_type(openai.InvalidRequestError))
 def fetch_embeddings(text_or_tokens_array: List[str],
                      model_name: str) -> List[List[float]]:
-    ensure_api()
     return [r['embedding'] for r in
             openai.Embedding.create(input=text_or_tokens_array,
                                     model=model_name)["data"]]
@@ -61,7 +57,6 @@ def get_embeddings(chunked_texts: List[str],
 def chat(model_name: str,
          system_prompt: str,
          user_prompt: str):
-    ensure_api()
     return openai.ChatCompletion.create(
         model=model_name,
         messages=[
@@ -78,9 +73,8 @@ def chat_completion_request(messages: List[Dict],
                             functions: List[Dict] = None,
                             call_function: str = None,
                             temperature: float = 1,  # 0 to 2
-                            model_name: str = GPT_MODEL) -> Dict:
-    ensure_api()
-
+                            model_name: str = GPT_MODEL,
+                            attempts: int = 4) -> Dict:
     args = {'model': model_name,
             'messages': messages,
             'temperature': temperature}
@@ -104,9 +98,21 @@ def chat_completion_request(messages: List[Dict],
         response = openai.ChatCompletion.create(**args)["choices"][0]["message"]
         function_call = response.get('function_call', None)
         if function_call:
-            return {'call_function': function_call['name'],
-                    'with_arguments': json.loads(function_call['arguments'])}
-        return {'reply': response['content']}
+            try:
+                return {'call_function': function_call['name'],
+                        'with_arguments': json.loads(function_call['arguments']),
+                        'success': True}
+            except:
+                if attempts:
+                    return chat_completion_request(messages=messages,
+                                                   functions=functions,
+                                                   call_function=call_function,
+                                                   temperature=temperature/2,
+                                                   model_name=model_name,
+                                                   attempts=attempts-1)
+                return {'success': False}
+        return {'reply': response['content'],
+                'success': True}
     except openai.InvalidRequestError as exc:
         raise E.AwordError('Invalid request error from OpenAI') from exc
 

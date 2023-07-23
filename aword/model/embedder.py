@@ -9,14 +9,14 @@ from aword.chunk import Payload, Chunk
 from aword.apis import oai
 
 
-def make_embedder(config: Dict):
+def make_embedder(awd, config: Dict):
     provider = config.get('provider')
 
     if provider == 'huggingface':
-        return HuggingFaceEmbedder(**config)
+        return HuggingFaceEmbedder(awd, **config)
 
     if provider == 'openai':
-        return OAIEmbedder(**config)
+        return OAIEmbedder(awd, **config)
 
     raise ValueError(f"Unknown model provider '{provider}'")
 
@@ -132,12 +132,14 @@ class Embedder:
 class OAIEmbedder(Embedder):
 
     def __init__(self,
+                 awd,
                  embedding_chunk_size: int,
                  model_name: str = 'text-embedding-ada-002',
                  encoding: str = 'cl100k_base',
                  max_sequence_length: int = 8191,
                  dimensions: int = 1536,
                  **_):
+        oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
         super().__init__(tokenizer=oai.get_tokenizer(encoding),
                          embedding_fn=oai.get_embeddings,
                          chunk_size=embedding_chunk_size,
@@ -149,6 +151,7 @@ class OAIEmbedder(Embedder):
 class HuggingFaceEmbedder(Embedder):
 
     def __init__(self,
+                 awd,
                  embedding_chunk_size: int,
                  model_name: str = 'multi-qa-mpnet-base-dot-v1',
                  max_sequence_length: int = 512,
