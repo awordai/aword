@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import os
 import time
 from typing import Dict, List, Tuple
+import logging
 
 import requests
 
+import aword.errors as E
 import aword.tools as T
 from aword.app import Awd
 from aword.segment import Segment
@@ -16,13 +17,12 @@ SourceName = 'notion'
 Timeout = 30
 Users = {}
 
-Testing = False
 API_KEY = ''
 
 
 def get_headers():
     if not API_KEY:
-        raise RuntimeError('No AWORD_NOTION_API_KEY found as an environment variable')
+        raise E.AwordError('No AWORD_NOTION_API_KEY found as an environment variable')
 
     return {
         "Authorization": f"Bearer {API_KEY}",
@@ -49,9 +49,8 @@ def fetch_all_pages_in_database(database_id: str) -> List:
                                  json=data,
                                  timeout=Timeout)
 
-        print(response.content)
         if response.status_code != 200:
-            raise RuntimeError(f"Request failed with status code {response.status_code}")
+            raise E.AwordFetchError('fetch_all_pages_in_database failed.', response)
 
         result = response.json()
         all_pages.extend(result["results"])
@@ -67,12 +66,13 @@ def fetch_block_children(block_id: str,
     """It returns the actual content of the page, in the form of a
     list of blocks.
     """
-    print('Fetching block/page content for', block_id)
+    logger = logging.getLogger(__name__)
+    logger.info('Fetching block/page content for %s', block_id)
     url = f"https://api.notion.com/v1/blocks/{block_id}/children"
     response = requests.get(url, headers=get_headers(), timeout=Timeout)
 
     if response.status_code != 200:
-        raise RuntimeError(f"Request failed with status code {response.status_code}")
+        raise E.AwordFetchError('fetch_block_children failed.', response)
 
     content = response.json()["results"]
 
@@ -97,12 +97,13 @@ def fetch_page(page_id: str) -> Dict:
     'properties' object with things like the title, but not the page
     contents.
     """
-    print('Fetching page', page_id)
+    logger = logging.getLogger(__name__)
+    logger.info('Fetching page %s', page_id)
     url = f"https://api.notion.com/v1/pages/{page_id}"
     response = requests.get(url, headers=get_headers(), timeout=Timeout)
 
     if response.status_code != 200:
-        raise RuntimeError(f"Request failed with status code {response.status_code}")
+        raise E.AwordFetchError('fetch_page failed.', response)
 
     return response.json()
 
@@ -162,14 +163,16 @@ def extract_page_title(page: Dict) -> str:
 
 
 def fetch_user_data(user_id: str, sleeping: int = 0) -> str:
+    logger = logging.getLogger(__name__)
     if user_id not in Users:
-        print('Fetching user data for', user_id)
+        logger.info('Fetching user data for %s', user_id)
         response = requests.get(f"https://api.notion.com/v1/users/{user_id}",
                                 headers=get_headers(),
                                 timeout=Timeout)
 
         if response.status_code != 200:
-            raise RuntimeError(f"Request failed with status code {response.status_code}")
+            raise E.AwordFetchError('fetch_user_data failed.', response)
+
         user_data = response.json()
 
         if sleeping:
@@ -185,7 +188,8 @@ def fetch_page_authors(page: Dict, sleeping: int = 0) -> Tuple:
     last_edited_by_id = (created_by_id if 'last_edited_by' not in page
                          else page['last_edited_by']['id'])
 
-    print('Fetching page authors')
+    logger = logging.getLogger(__name__)
+    logger.info('Fetching page authors')
     created_by = fetch_user_data(created_by_id, sleeping)
     last_edited_by = (created_by if last_edited_by_id == created_by_id
                       else fetch_user_data(last_edited_by_id, sleeping))
@@ -201,7 +205,8 @@ def parse_page(title: str,
                timestamp: str,
                content: List):
 
-    print('Parsing', title)
+    logger = logging.getLogger(__name__)
+    logger.info('Parsing %s', title)
 
     def _text_from_block(block):
         out = []
@@ -273,15 +278,16 @@ def process_page(page_id: str,
     if short_page_id in visited:
         return
 
+    logger = logging.getLogger(__name__)
+
     try:
         page = fetch_page(page_id)
         if sleeping:
             time.sleep(sleeping)
         page_content = fetch_block_children(page_id, sleeping=sleeping)
     except:
-        print('Failed tying to fetch', page_id)
-        if Testing:
-            raise
+        logger.error('Failed tying to fetch %s', page_id)
+        return
 
     last_edited_dt = T.timestamp_as_utc(page.get(
         'last_edited_time', page['created_time']))
@@ -311,9 +317,7 @@ def process_page(page_id: str,
                                             last_edited_timestamp=last_edited_dt,
                                             segments=segments)
         except:
-            print('Failed processing page', page_id)
-            if Testing:
-                raise
+            logger.error('Failed processing page %s', page_id)
 
     if recurse_subpages:
         visited.add(short_page_id)
@@ -333,9 +337,6 @@ def add_to_cache(awd: Awd,
                  sleeping: int = 0.5):
     global API_KEY
     API_KEY = awd.getenv('NOTION_API_KEY')
-
-    global Testing
-    Testing = awd.is_testing()
 
     sources = awd.get_single_source_config(SourceName, {})
 

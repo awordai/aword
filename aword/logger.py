@@ -19,7 +19,7 @@ class MaybeSilentHandler(logging.StreamHandler):
         if record.levelno == logging.ERROR:
             etype, evalue, etraceback = sys.exc_info()
             if etype is not None:
-                record.msg += '\n'.join(format_exception(etype, evalue, etraceback))
+                record.msg += '\n'.join([''] + format_exception(etype, evalue, etraceback))
         super().emit(record)
 
 

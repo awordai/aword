@@ -305,10 +305,6 @@ class Awd:
 
 def main():
     import argparse
-    from aword.logger import configure_logging
-    import aword.source.notion
-    import aword.model.persona
-    import aword.model.respondent
 
     core_arguments = {
         ('-v', '--verbose'): {'help': 'Enable info logs.',
@@ -336,10 +332,6 @@ def main():
 
     global_args, cmdline = parser_config.parse_known_args()
 
-    configure_logging(debug=global_args.debug,
-                      silent=not global_args.verbose,
-                      error_logs_dir=global_args.error_logs_dir)
-
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      allow_abbrev=True)
@@ -351,9 +343,17 @@ def main():
     for argument, options in core_arguments.items():
         parser.add_argument(*argument, **options)
 
-    awd = Awd(environment_name=global_args.environment,
-              config_dir=global_args.config_dir)
 
+    from aword.logger import configure_logging
+    configure_logging(debug=global_args.debug,
+                      silent=not global_args.verbose,
+                      error_logs_dir=global_args.error_logs_dir)
+
+    # These imports happen after the logging has been
+    # configured. Otherwise they could get an unconfigured logger.
+    import aword.source.notion
+    import aword.model.persona
+    import aword.model.respondent
     commands = {
         'chat': aword.model.persona,
         'ask': aword.model.respondent,
@@ -386,6 +386,8 @@ def main():
         dict_args.pop(argument[1].replace('--', '').replace('-', '_'))
     dict_args['mode'] = command
 
+    awd = Awd(environment_name=global_args.environment,
+              config_dir=global_args.config_dir)
     command_function(awd, dict_args)
 
 
