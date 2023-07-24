@@ -24,7 +24,10 @@ class Cache(ABC):
     def summarize(self, text):
         if self.summarizer is not None:
             if len(text.split()) > self.summarizer.get_param('summary_words'):
-                return self.summarizer.ask(text)
+                summary = self.summarizer.ask(text)
+                if summary['success']:
+                    return summary['with_arguments']['summary']
+                return text[:self.summarizer.get_param('summary_words')] + '...'
             return text
         return ''
 

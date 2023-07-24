@@ -57,7 +57,7 @@ def add_to_cache(awd: Awd,
                         full_source_name, file_path)
 
                     if last_stored_edit_dt is None or file_modified_dt > last_stored_edit_dt:
-                        awd.logger.info('Parsing', file_path)
+                        awd.logger.info('Parsing %s', file_path)
                         uri = T.file_to_uri(file_path)
                         parser_fn = parsers[file_extension]
                         segments = parser_fn(

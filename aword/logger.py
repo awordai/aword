@@ -28,7 +28,7 @@ class Formatter(logging.Formatter):
     def format(self, record):
         if record.levelno == logging.INFO:
             # pylint: disable=protected-access
-            self._style._fmt = "%(message)s"
+            self._style._fmt = "%(module)s:: %(message)s"
         else:
             self._style._fmt = '%(levelname)s::%(module)s|%(lineno)s:: %(message)s'
         return super().format(record)

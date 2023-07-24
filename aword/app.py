@@ -249,7 +249,7 @@ class Awd:
             add_summaries = cache_config.get('add_summaries', 'False').lower() == 'true'
 
             self._source_unit_cache = processor.make_source_unit_cache(
-                self.get_persona('summarizer') if add_summaries else None, **cache_config)
+                self.get_respondent('summarizer') if add_summaries else None, **cache_config)
 
         return self._source_unit_cache
 
