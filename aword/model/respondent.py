@@ -48,7 +48,7 @@ class OAIRespondent:
     def ask(self,
             text: str,
             temperature: float = 1):
-        self.logger.info('ask @%s: %s', self.respondent_name, text[:60])
+        self.logger.info('ask @%s: %s', self.respondent_name, text[:80].replace('\n', ''))
         return oai.chat_completion_request(
             messages=[{'role': 'system',
                        'content': self.system_prompt},

@@ -46,6 +46,10 @@ def add_args(parser):
     parser.add_argument('--chunks-from-source',
                         help='Pretty-print all the rows from a source in the chunk cache',
                         type=str)
+    parser.add_argument('--chunks-from-source-unit',
+                        help=('Pretty-print all the rows from a source,source_unit '
+                              'in the chunk cache'),
+                        type=str)
     parser.add_argument('--all-chunks',
                         help='Pretty-print all the rows in the chunk cache',
                         action='store_true')
@@ -61,6 +65,15 @@ def main(awd, args):
     cuc = awd.get_chunk_cache()
     if args['chunks_from_source']:
         for row in cuc.get_by_source(source=args['chunks_from_source']):
+            row_copy = row.copy()
+            if row_copy['vector']:
+                row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
+            pprint(row_copy)
+
+    cuc = awd.get_chunk_cache()
+    if args['chunks_from_source_unit']:
+        source, source_unit_id = args['chunks_from_source_unit'].split(',')
+        for row in cuc.get_by_source_unit(source=source, source_unit_id=source_unit_id):
             row_copy = row.copy()
             if row_copy['vector']:
                 row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]

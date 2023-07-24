@@ -222,7 +222,7 @@ def test_chunk_add_and_get():
                     chunk_id=chunk_id)]
 
     now = datetime.now(utc)
-    db.add_or_update(source, source_unit_id, chunks, now)
+    db.add(source, source_unit_id, chunks, now)
 
     result = db.get(chunk_id)
     assert result.payload.body == text

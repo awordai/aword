@@ -28,7 +28,7 @@ def make_source_unit_cache(summarizer=None, **kw):
 
 
 def make_chunk_cache(**kw):
-    return ChunkDB(model_name=kw['model_name'], fname=kw.get('db_file', None))
+    return ChunkDB(fname=kw.get('db_file', None))
 
 
 def get_connection(fname=None):
@@ -366,9 +366,9 @@ class SourceUnitDB(Cache):
 
 
 class ChunkDB:
-    def __init__(self, model_name, fname=None):
+    def __init__(self, fname=None):
         self.conn = get_connection(fname)
-        self.table_name = 'chunk_' + model_name.replace('-', '_')
+        self.table_name = 'chunk'
 
         self.logger = logging.getLogger(__name__)
 

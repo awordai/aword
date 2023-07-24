@@ -59,7 +59,7 @@ class Awd:
         self._respondents = {}
         self._store = {}
         self._source_unit_cache = None
-        self._chunk_cache = {}
+        self._chunk_cache = None
 
     def getenv(self, varname):
         return self.environment.get(varname.upper(), '')
@@ -257,20 +257,15 @@ class Awd:
 
         return self._source_unit_cache
 
-    def get_chunk_cache(self, model_name: str = None):
-        if model_name is None:
-            embedding_config = self.get_config('embedding')
-            model_name = embedding_config['model_name']
-
-        if model_name not in self._chunk_cache:
+    def get_chunk_cache(self):
+        if self._chunk_cache is None:
             cache_config = self.get_config('cache').copy()
             provider = cache_config.get('provider', 'edge')
             processor = import_module(f'aword.cache.{provider}')
 
-            cache_config['model_name'] = model_name
-            self._chunk_cache[model_name] = processor.make_chunk_cache(**cache_config)
+            self._chunk_cache = processor.make_chunk_cache(**cache_config)
 
-        return self._chunk_cache[model_name]
+        return self._chunk_cache
 
     def update_cache(self):
         sources = ['local', 'notion']
@@ -280,7 +275,7 @@ class Awd:
 
     def embed_and_store(self, collection_name: str = None, model_name: str = None):
         source_unit_cache = self.get_source_unit_cache()
-        chunk_cache = self.get_chunk_cache(model_name)
+        chunk_cache = self.get_chunk_cache()
 
         store = self.get_store(collection_name)
         embedder = self.get_embedder(model_name)
