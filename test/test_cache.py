@@ -8,9 +8,9 @@ def test_update_cache(awd):
     awd.update_cache()
 
     unembedded = suc.get_unembedded()
-    assert len(unembedded) == 8
+    assert len(unembedded) == 14
 
-    assert sum(len(source_unit['segments']) for source_unit in unembedded) == 39
+    assert sum(len(source_unit['segments']) for source_unit in unembedded) == 74
 
 
 # pylint: disable=unused-argument

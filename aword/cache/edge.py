@@ -154,7 +154,7 @@ class SourceUnitDB(Cache):
         existing_record = self.get(source, source_unit_id)
         if existing_record:
             query = """
-                INSERT INTO source_unit_history
+                INSERT OR REPLACE INTO source_unit_history
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             self.conn.execute(query, (
@@ -272,6 +272,33 @@ class SourceUnitDB(Cache):
             self.conn.execute(query, (now, row['source'], row['source_unit_id']))
         self.conn.commit()
 
+    def reset_embedded(self,
+                       source: str = None,
+                       source_unit_id: str = None):
+        query = "UPDATE source_unit SET embedded_timestamp = null"
+        where = []
+        where_vars = []
+
+        if source:
+            where = ['source = ?']
+            where_vars = [source]
+
+        if source_unit_id:
+            where.append('source_unit_id = ?')
+            where_vars.append(source_unit_id)
+
+        where = ' AND '.join(where)
+        if where:
+            where = ' WHERE ' + where
+
+        self.conn.execute(query + where, tuple(where_vars))
+        logger = logging.getLogger(__name__)
+        where_log = ', '.join(where_vars)
+        logger.info('Resetted last embedded datetime%s',
+                    (' (%s)' % where_log) if where_log else '')
+
+        self.conn.commit()
+
     def get_last_edited_timestamp(self,
                                   source: str,
                                   source_unit_id: str) -> Optional[datetime]:
@@ -385,11 +412,27 @@ class ChunkDB:
           payload TEXT,
           vector_db_id TEXT,
           added_timestamp TIMESTAMP,
-          PRIMARY KEY(chunk_id, source, source_unit_id),
+          PRIMARY KEY(source, source_unit_id, chunk_id),
           FOREIGN KEY(source, source_unit_id) REFERENCES source_unit(source, source_unit_id)
         )
         """)
         self.logger.info('Attempted %s table creation', self.table_name)
+
+    def reset_table(self, only_in_memory=True):
+        logger = logging.getLogger(__name__)
+
+        if self.fname is not None and only_in_memory:
+            print(self.fname, only_in_memory)
+            logger.warning('Refusing to drop persistent chunk table '
+                           'without `only_in_memory` argument')
+            return
+        try:
+            self.conn.execute(f"DROP TABLE IF EXISTS {self.table_name}")
+            self.logger.info('Dropped table %s', self.table_name)
+            self.create_table()
+        except Error as e:
+            logger.error('Failed trying to recreate %s table', self.table_name)
+            raise E.AwordError(f'Failed trying to create {self.table_name} table') from e
 
     def add(self,
             source: str,
@@ -397,7 +440,7 @@ class ChunkDB:
             chunks: List[Chunk],
             now=None):
         self.conn.executemany(f"""
-        INSERT INTO {self.table_name}
+        INSERT OR REPLACE INTO {self.table_name}
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """, [(chunk.chunk_id or str(uuid.uuid5(uuid.NAMESPACE_URL, chunk.text)),
                source,

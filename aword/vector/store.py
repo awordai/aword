@@ -30,6 +30,9 @@ def make_id(source_unit_id, text):
 
 class Store(ABC):
 
+    def __init__(self, awd):
+        self.logger = awd.logger
+
     @abstractmethod
     def clean_source_unit(self,
                           source_unit_id: str):
@@ -64,7 +67,12 @@ class Store(ABC):
             # embedding.  Maybe do the embedding separately, and then
             # average it with a weight. It will probably not work with
             # non normalized embeddings.
+
             chunks = embedder.get_embedded_chunks(segment.body)
+            self.logger.info('Embedding (%s, %s), got %s chunks',
+                             source,
+                             source_unit_id,
+                             len(chunks))
             for chunk in chunks:
                 chunk.payload.source = source
                 chunk.payload.source_unit_id = source_unit_id
@@ -93,6 +101,7 @@ class QdrantStore(Store):
                  url: str = None,
                  distance: str = 'cosine',
                  **_):
+        super().__init__(awd)
         self.collection_name = collection_name
         self.distance = distance
 
@@ -100,12 +109,19 @@ class QdrantStore(Store):
             client_pars = {'url': url}
             if 'localhost' not in url and '127.0.0' not in url:
                 client_pars['api_key'] = awd.getenv('QDRANT_API_KEY')
+            self.logger.info('Connecting to remote qdrant client on %s', url)
         elif local_db:
             client_pars = {'path': local_db}
+            self.logger.info('Connecting to local qdrant client on %s', local_db)
         else:
             raise RuntimeError('Need either local_db or url')
 
         self.client = QdrantClient(**client_pars)
+        try:
+            self.client.get_collection(collection_name=collection_name)
+        except:
+            self.logger.warn('Collection %s does not exist, creating it', collection_name)
+            self.create_collection(dimensions=awd.get_embedder().dimensions)
 
     def create_collection(self, dimensions: int):
         distance = {'dot': models.Distance.DOT,
@@ -139,6 +155,8 @@ class QdrantStore(Store):
         self.client.create_payload_index(collection_name=self.collection_name,
                                          field_name='language',
                                          field_schema="keyword")
+
+        self.logger.info('Created collection %s', self.collection_name)
 
     def count(self) -> int:
         return self.client.count(collection_name=self.collection_name,
@@ -230,6 +248,7 @@ class QdrantStore(Store):
 
         self.client.upsert(collection_name=self.collection_name,
                            points=points)
+        self.logger.info('Upserted %s points to %s', len(points), self.collection_name)
         return out
 
     def retrieve(self,

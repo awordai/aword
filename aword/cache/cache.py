@@ -40,30 +40,40 @@ class Cache(ABC):
 
 
 def add_args(parser):
-    parser.add_argument('--source-units-from-source',
+    parser.add_argument('--source-unit-list-from-source',
                         help='Pretty-print all the rows from a source in the source unit cache',
                         type=str)
-    parser.add_argument('--chunks-from-source',
+    parser.add_argument('--source-unit-reset-last-embedded',
+                        help='Set the last embedded datetime to None, forcing the next embed',
+                        action='store_true')
+    parser.add_argument('--chunk-list-from-source',
                         help='Pretty-print all the rows from a source in the chunk cache',
                         type=str)
-    parser.add_argument('--chunks-from-source-unit',
+    parser.add_argument('--chunk-list-from-source-unit',
                         help=('Pretty-print all the rows from a source,source_unit '
                               'in the chunk cache'),
                         type=str)
-    parser.add_argument('--all-chunks',
+    parser.add_argument('--chunk-list-all',
                         help='Pretty-print all the rows in the chunk cache',
+                        action='store_true')
+    parser.add_argument('--chunk-reset-table',
+                        help='Drop and recreate the chunk table',
                         action='store_true')
 
 
+# pylint: disable=too-many-branches
 def main(awd, args):
     from pprint import pprint
     suc = awd.get_source_unit_cache()
-    if args['source_units_from_source']:
+    if args['source_unit_list_from_source']:
         for row in suc.get_by_source(source=args['source_units_from_source']):
             pprint(row)
 
+    if args['source_unit_reset_last_embedded']:
+        suc.reset_embedded()
+
     cuc = awd.get_chunk_cache()
-    if args['chunks_from_source']:
+    if args['chunk_list_from_source']:
         for row in cuc.get_by_source(source=args['chunks_from_source']):
             row_copy = row.copy()
             if row_copy['vector']:
@@ -71,7 +81,7 @@ def main(awd, args):
             pprint(row_copy)
 
     cuc = awd.get_chunk_cache()
-    if args['chunks_from_source_unit']:
+    if args['chunk_list_from_source_unit']:
         source, source_unit_id = args['chunks_from_source_unit'].split(',')
         for row in cuc.get_by_source_unit(source=source, source_unit_id=source_unit_id):
             row_copy = row.copy()
@@ -79,9 +89,12 @@ def main(awd, args):
                 row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
             pprint(row_copy)
 
-    if args['all_chunks']:
+    if args['chunk_list_all']:
         for row in cuc.get_all():
             row_copy = row.copy()
             if row_copy['vector']:
                 row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
             pprint(row_copy)
+
+    if args['chunk_reset_table']:
+        cuc.reset_table(only_in_memory=False)
