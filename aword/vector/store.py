@@ -158,12 +158,9 @@ class QdrantStore(Store):
 
         self.logger.info('Created collection %s', self.collection_name)
 
-    def count(self) -> int:
-        return self.client.count(collection_name=self.collection_name,
-                                 exact=True).count
-
     def create_filter(self,
                       sources: Union[List[str], str] = None,
+                      source_unit_ids: Union[List[str], str] = None,
                       categories: Union[List[str], str] = None,
                       scopes: Union[List[str], str] = None,
                       contexts: Union[List[str], str] = None,
@@ -177,6 +174,8 @@ class QdrantStore(Store):
         where = {}
         if sources:
             where['source'] = sources
+        if source_unit_ids:
+            where['source_unit_id'] = source_unit_ids
         if categories:
             where['categories'] = categories
         if scopes:
@@ -206,6 +205,7 @@ class QdrantStore(Store):
                query_vector: List[float],
                limit: int,
                sources: Union[List[str], str] = None,
+               source_unit_ids: Union[List[str], str] = None,
                categories: Union[List[str], str] = None,
                scopes: Union[List[str], str] = None,
                contexts: Union[List[str], str] = None,
@@ -214,12 +214,30 @@ class QdrantStore(Store):
         out = self.client.search(collection_name=self.collection_name,
                                  query_vector=query_vector,
                                  query_filter=self.create_filter(sources=sources,
+                                                                 source_unit_ids=source_unit_ids,
                                                                  categories=categories,
                                                                  scopes=scopes,
                                                                  contexts=contexts,
                                                                  languages=languages),
                                  limit=limit)
         return [r.payload for r in out]
+
+    def count(self,
+              sources: Union[List[str], str] = None,
+              source_unit_ids: Union[List[str], str] = None,
+              categories: Union[List[str], str] = None,
+              scopes: Union[List[str], str] = None,
+              contexts: Union[List[str], str] = None,
+              languages: Union[List[str], str] = None) -> int:
+        return self.client.count(collection_name=self.collection_name,
+                                 count_filter=self.create_filter(sources=sources,
+                                                                 source_unit_ids=source_unit_ids,
+                                                                 categories=categories,
+                                                                 scopes=scopes,
+                                                                 contexts=contexts,
+                                                                 languages=languages),
+                                 exact=True).count
+
 
     def clean_source_unit(self, source_unit_id: str):
         self.client.delete(collection_name=self.collection_name,
@@ -263,6 +281,7 @@ class QdrantStore(Store):
 
     def fetch_all(self,
                   sources: Union[List[str], str] = None,
+                  source_unit_ids: Union[List[str], str] = None,
                   categories: Union[List[str], str] = None,
                   scopes: Union[List[str], str] = None,
                   contexts: Union[List[str], str] = None,
@@ -279,6 +298,7 @@ class QdrantStore(Store):
                 limit=per_page,
                 offset=offset,
                 scroll_filter=self.create_filter(sources=sources,
+                                                 source_unit_ids=source_unit_ids,
                                                  categories=categories,
                                                  scopes=scopes,
                                                  contexts=contexts,
@@ -288,3 +308,34 @@ class QdrantStore(Store):
             all_points += [point.payload for point in points]
 
         return all_points
+
+
+def add_args(parser):
+    parser.add_argument('--source',
+                        help='Limit listings and actions to this source.',
+                        type=str)
+    parser.add_argument('--source-unit-id',
+                        help=('Limit listings and actions to this source unit id. '
+                              'It only makes sense if source is also defined with --source.'),
+                        type=str)
+
+    parser.add_argument('--count-embeddings',
+                        help=('Count the embeddings.'),
+                        action='store_true')
+
+
+def main(awd, args):
+    if args['source_unit_id'] and not args['source']:
+        awd.logger.error('Got source-unit-id but no source, please specify one.')
+        import sys
+        sys.exit(1)
+
+    filter_args = {}
+    if args['source']:
+        filter_args['sources'] = [args['source']]
+    if args['source_unit_id']:
+        filter_args['source_unit_ids'] = [args['source_unit_id']]
+
+    store = awd.get_store()
+    if args['count_embeddings']:
+        print(store.count(**filter_args))

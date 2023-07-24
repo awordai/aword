@@ -373,12 +373,14 @@ def app():
     import aword.model.persona
     import aword.model.respondent
     import aword.cache.cache
+    import aword.vector.store
     commands = {
         'notion': aword.source.notion,
         'local': aword.source.local,
         'chat': aword.model.persona,
         'ask': aword.model.respondent,
-        'cache': aword.cache.cache
+        'cache': aword.cache.cache,
+        'store': aword.vector.store
     }
 
     subparsers = parser.add_subparsers(title='Commands')
