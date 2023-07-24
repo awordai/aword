@@ -57,11 +57,19 @@ def add_args(parser):
                         help=('Pretty-print the rows in the chunk cache, '
                               'possibly restricted to a source [, source unit].'),
                         action='store_true')
+    parser.add_argument('--count-source-units',
+                        help=('Count the rows in the source unit cache, '
+                              'possibly restricted to a single source if one is specified.'),
+                        action='store_true')
+    parser.add_argument('--count-chunks',
+                        help=('Count the rows in the chunk cache, '
+                              'possibly restricted to a source [, source unit].'),
+                        action='store_true')
     parser.add_argument('--reset-embedded',
                         help=('Set the last embedded datetime to None, forcing the next embed, '
                               'possibly restricted to a source [, source unit].'),
                         action='store_true')
-    parser.add_argument('--chunk-reset-table',
+    parser.add_argument('--reset-chunk-table',
                         help='Drop and recreate the chunk table',
                         action='store_true')
 
@@ -92,9 +100,17 @@ def main(awd, args):
                 row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
             pprint(row_copy)
 
+    if args['count_source_units']:
+        print(source_unit_cache.count_rows(source=source,
+                                           source_unit_id=source_unit_id))
+
+    if args['count_chunks']:
+        print(chunk_cache.count_rows(source=source,
+                                     source_unit_id=source_unit_id))
+
     if args['reset_embedded']:
         source_unit_cache.reset_embedded(source=source,
                                          source_unit_id=source_unit_id)
 
-    if args['chunk_reset_table']:
+    if args['reset_chunk_table']:
         chunk_cache.reset_table(only_in_memory=False)

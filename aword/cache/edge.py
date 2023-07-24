@@ -260,6 +260,15 @@ class SourceUnitDB(Cache):
                          source, source_unit_id, timestamp_str(last_edited_timestamp))
         return source_unit_id
 
+    def count_rows(self,
+                   source: str = None,
+                   source_unit_id: str = None) -> int:
+        cursor = self.conn.cursor()
+        query, args, _ = limit_query('SELECT COUNT(*) FROM source_unit', source, source_unit_id)
+        cursor.execute(query, args)
+        # fetchone will return a tuple with one element
+        return cursor.fetchone()[0]
+
     def get_by_uri(self, source: str, uri: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM source_unit WHERE uri=? AND source=?", (uri, source))
@@ -485,6 +494,17 @@ class ChunkDB:
         return T.timestamp_as_utc(
             row['added_timestamp'] + ('+00:00' if '+' not in row['added_timestamp']
                                       else ''))
+
+    def count_rows(self,
+                   source: str = None,
+                   source_unit_id: str = None) -> int:
+        cursor = self.conn.cursor()
+        query, args, _ = limit_query(f'SELECT COUNT(*) FROM {self.table_name}',
+                                     source,
+                                     source_unit_id)
+        cursor.execute(query, args)
+        # fetchone will return a tuple with one element
+        return cursor.fetchone()[0]
 
     def get(self, chunk_id: str) -> Optional[Chunk]:
         cursor = self.conn.cursor()
