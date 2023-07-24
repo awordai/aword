@@ -8,11 +8,13 @@ from typing import Dict
 from aword.apis import oai
 
 
-def make_persona(awd, config: Dict):
+def make_persona(awd,
+                 persona_name: str,
+                 config: Dict):
     provider = config.get('provider', 'openai')
 
     if provider == 'openai':
-        return OAIPersona(awd, **config)
+        return OAIPersona(awd, persona_name, **config)
 
     raise ValueError(f"Unknown model provider '{provider}'")
 
@@ -21,11 +23,15 @@ class OAIPersona:
 
     def __init__(self,
                  awd,
+                 persona_name,
                  model_name: str,
                  system_prompt: str,
                  user_prompt_preface: str = '',
                  **params):
         oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
+
+        self.logger = awd.logger
+        self.persona_name = persona_name
         self.model_name = model_name
         self.params = params
         self.system_prompt = string.Template(system_prompt).substitute(params)
@@ -35,6 +41,7 @@ class OAIPersona:
         return self.params[parname]
 
     def ask(self, text: str):
+        self.logger.info('ask @%s: %s', self.persona_name, text[:60])
         return oai.chat(model_name=self.model_name,
                         system_prompt=self.system_prompt,
                         user_prompt=self.user_prompt_preface + text)

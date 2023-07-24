@@ -7,11 +7,13 @@ from typing import Dict
 from aword.apis import oai
 
 
-def make_respondent(awd, config: Dict):
+def make_respondent(awd,
+                    respondent_name: str,
+                    config: Dict):
     provider = config.get('provider', 'openai')
 
     if provider == 'openai':
-        return OAIRespondent(awd, **config)
+        return OAIRespondent(awd, respondent_name, **config)
 
     raise ValueError(f"Unknown model provider '{provider}'")
 
@@ -20,6 +22,7 @@ class OAIRespondent:
 
     def __init__(self,
                  awd,
+                 respondent_name: str,
                  model_name: str,
                  system_prompt: str,
                  call_function: Dict,
@@ -27,6 +30,8 @@ class OAIRespondent:
                  **params):
         oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
 
+        self.logger = awd.logger
+        self.respondent_name = respondent_name
         self.model_name = model_name
         self.params = params
 
@@ -40,8 +45,10 @@ class OAIRespondent:
     def get_param(self, parname: str):
         return self.params[parname]
 
-    def ask(self, text: str,
+    def ask(self,
+            text: str,
             temperature: float = 1):
+        self.logger.info('ask @%s: %s', self.respondent_name, text[:60])
         return oai.chat_completion_request(
             messages=[{'role': 'system',
                        'content': self.system_prompt},

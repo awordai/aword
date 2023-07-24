@@ -167,12 +167,12 @@ class Awd:
         if respondent_name not in self._respondents:
             respondents_config = self.get_json_config('respondents')
             if respondent_name not in respondents_config:
-                raise RuntimeError(f'No configuration found for respondent {respondent_name}')
+                raise E.AwordError(f'No configuration found for respondent {respondent_name}')
             config = respondents_config[respondent_name].copy()
 
             if 'system_prompt' not in config:
                 if 'system_prompt_file' not in config:
-                    raise RuntimeError(f'Need a system prompt in the config of {respondent_name}')
+                    raise E.AwordError(f'Need a system prompt in the config of {respondent_name}')
 
                 with open(config['system_prompt_file'], encoding='utf-8') as fin:
                     config['system_prompt'] = fin.read()
@@ -184,7 +184,9 @@ class Awd:
             from aword.model.respondent import make_respondent
 
             model_config = self.get_json_config('models')[config['model_name']]
-            self._respondents[respondent_name] = make_respondent(self, {**model_config, **config})
+            self._respondents[respondent_name] = make_respondent(self,
+                                                                 respondent_name,
+                                                                 {**model_config, **config})
 
         return self._respondents[respondent_name]
 
@@ -209,7 +211,9 @@ class Awd:
             from aword.model.persona import make_persona
 
             model_config = self.get_json_config('models')[config['model_name']]
-            self._personas[persona_name] = make_persona(self, {**model_config, **config})
+            self._personas[persona_name] = make_persona(self,
+                                                        persona_name,
+                                                        {**model_config, **config})
 
         return self._personas[persona_name]
 

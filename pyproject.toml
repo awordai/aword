@@ -49,7 +49,7 @@ dev = [
 ingest-notion = "aword.sources.notion:ingest"
 ingest-linear = "aword.sources.linear:ingest"
 ingest-crowddev = "aword.sources.crowddev:ingest"
-aword = "aword.chat:main"
+aword = "aword.app:app"
 ask = "aword.model.respondent:main"
 
 [tool.pytest.ini_options]
