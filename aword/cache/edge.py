@@ -76,6 +76,29 @@ def timestamps_to_datetimes(row: Optional[sqlite3.Row]) -> Optional[Dict[str, An
     return None
 
 
+def limit_query(query: str,
+                source: str = None,
+                source_unit_id: str = None,
+                args: List[str] = None):
+    args = args or []
+    log_str = ''
+    if source is not None:
+        if 'WHERE' in query:
+            query += ' AND (source = ?'
+        else:
+            query += ' WHERE (source = ?'
+        args.append(source)
+        log_str = f' (source: {source}'
+        if source_unit_id is None:
+            query += ')'
+        else:
+            query += ' AND source_unit_id = ?)'
+            args.append(source_unit_id)
+            log_str += f', source_unit_id: {source_unit_id}'
+        log_str += ')'
+    return query, args, log_str
+
+
 class SourceUnitDB(Cache):
     def __init__(self, summarizer=None, fname=None):
         super().__init__(summarizer)
@@ -237,29 +260,32 @@ class SourceUnitDB(Cache):
                          source, source_unit_id, timestamp_str(last_edited_timestamp))
         return source_unit_id
 
-    def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE "
-                       "source=? AND "
-                       "source_unit_id=?",
-                       (source, source_unit_id))
-        out = timestamps_to_datetimes(cursor.fetchone())
-        return out
-
     def get_by_uri(self, source: str, uri: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM source_unit WHERE uri=? AND source=?", (uri, source))
         return timestamps_to_datetimes(cursor.fetchone())
 
-    def get_unembedded(self) -> List[Dict[str, Any]]:
+    def list_rows(self,
+                  source: str = None,
+                  source_unit_id: str = None) -> List[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM source_unit
-            WHERE embedded_timestamp IS NULL
-            OR embedded_timestamp < last_edited_timestamp
-        """)
-        rows = cursor.fetchall()
-        return [timestamps_to_datetimes(row) for row in rows]
+        query, args, _ = limit_query('SELECT * FROM source_unit', source, source_unit_id)
+        cursor.execute(query, args)
+        return [timestamps_to_datetimes(dict(row)) for row in cursor.fetchall()]
+
+    def get(self, source: str, source_unit_id: str) -> Optional[Dict[str, Any]]:
+        rows = self.list_rows(source, source_unit_id)
+        return rows[0] if rows else None
+
+    def list_unembedded_rows(self,
+                             source: str = None) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        query, args, _ = limit_query(('SELECT * FROM source_unit '
+                                      'WHERE embedded_timestamp IS NULL '
+                                      'OR embedded_timestamp < last_edited_timestamp'),
+                                     source)
+        cursor.execute(query, args)
+        return [timestamps_to_datetimes(row) for row in cursor.fetchall()]
 
     def flag_as_embedded(self, rows: List[Dict[str, Any]], now: datetime = None):
         query = """
@@ -275,28 +301,12 @@ class SourceUnitDB(Cache):
     def reset_embedded(self,
                        source: str = None,
                        source_unit_id: str = None):
-        query = "UPDATE source_unit SET embedded_timestamp = null"
-        where = []
-        where_vars = []
-
-        if source:
-            where = ['source = ?']
-            where_vars = [source]
-
-        if source_unit_id:
-            where.append('source_unit_id = ?')
-            where_vars.append(source_unit_id)
-
-        where = ' AND '.join(where)
-        if where:
-            where = ' WHERE ' + where
-
-        self.conn.execute(query + where, tuple(where_vars))
+        query, args, logstr = limit_query('UPDATE source_unit SET embedded_timestamp = null',
+                                          source,
+                                          source_unit_id)
+        self.conn.execute(query, args)
         logger = logging.getLogger(__name__)
-        where_log = ', '.join(where_vars)
-        logger.info('Resetted last embedded datetime%s',
-                    (' (%s)' % where_log) if where_log else '')
-
+        logger.info('Resetted last embedded datetime%s', logstr)
         self.conn.commit()
 
     def get_last_edited_timestamp(self,
@@ -326,11 +336,6 @@ class SourceUnitDB(Cache):
         return T.timestamp_as_utc(
             row['last_edited_timestamp'] + ('+00:00' if '+' not in row['last_edited_timestamp']
                                             else ''))
-
-    def get_by_source(self, source: str) -> List[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM source_unit WHERE source = ?", (source,))
-        return [timestamps_to_datetimes(dict(row)) for row in cursor.fetchall()]
 
     def get_history(self, source: str, source_unit_id: str) -> List[Dict[str, Any]]:
         """Returns the history of a source unit.
@@ -393,6 +398,7 @@ class SourceUnitDB(Cache):
 
 
 class ChunkDB:
+
     def __init__(self, fname=None):
         self.conn = get_connection(fname)
         self.table_name = 'chunk'
@@ -489,25 +495,19 @@ class ChunkDB:
                      chunk_id=row['chunk_id'],
                      vector_db_id=row['vector_db_id']) if row else None
 
-    def get_all(self) -> List[Chunk]:
+    def list_rows(self,
+                  source: str = None,
+                  source_unit_id: str = None) -> List[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        cursor.execute(f"SELECT * FROM {self.table_name}")
-        rows = cursor.fetchall()
+        query, args, _ = limit_query(f'SELECT * FROM {self.table_name}',
+                                     source,
+                                     source_unit_id)
+        cursor.execute(query, args)
         return [Chunk(vector=pickle.loads(row['vector']),
                       payload=Payload(**(json.loads(row['payload']))),
                       chunk_id=row['chunk_id'],
                       vector_db_id=row['vector_db_id'])
-                for row in rows]
-
-    def get_by_source(self, source: str) -> List[Chunk]:
-        cursor = self.conn.cursor()
-        cursor.execute(f"SELECT * FROM {self.table_name} WHERE source=?", (source,))
-        rows = cursor.fetchall()
-        return [Chunk(vector=pickle.loads(row['vector']),
-                      payload=Payload(**(json.loads(row['payload']))),
-                      chunk_id=row['chunk_id'],
-                      vector_db_id=row['vector_db_id'])
-                for row in rows]
+                for row in cursor.fetchall()]
 
     def get_by_source_unit(self, source: str, source_unit_id: str) -> List[Chunk]:
         cursor = self.conn.cursor()

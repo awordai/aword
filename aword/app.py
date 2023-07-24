@@ -281,7 +281,7 @@ class Awd:
         embedder = self.get_embedder(model_name)
 
         total_chunks = 0
-        for source_unit in source_unit_cache.get_unembedded():
+        for source_unit in source_unit_cache.list_unembedded_rows():
             now = datetime.now(utc)
             self.logger.info('Embedding and storing source unit (%s, %s)',
                              str(source_unit['source']),

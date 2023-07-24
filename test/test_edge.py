@@ -80,7 +80,7 @@ def test_get_by_uri():
     assert result['last_edited_by'] == editor_2
 
 
-def test_get_unembedded():
+def test_list_unembedded_rows():
     su = E.SourceUnitDB()
     source = 'test_source'
     source_unit_id = 'test_id_3'
@@ -94,12 +94,12 @@ def test_get_unembedded():
                      summary='test_summary 3',
                      segments=[])
 
-    results = su.get_unembedded()
+    results = su.list_unembedded_rows()
     assert len(results) == 2
 
     su.flag_as_embedded(results)
 
-    results = su.get_unembedded()
+    results = su.list_unembedded_rows()
     assert len(results) == 0
 
 

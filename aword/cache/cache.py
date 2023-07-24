@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Query the cache.
 """
+
 from abc import ABC, abstractmethod
 import langdetect
 
@@ -40,61 +41,60 @@ class Cache(ABC):
 
 
 def add_args(parser):
-    parser.add_argument('--source-unit-list-from-source',
-                        help='Pretty-print all the rows from a source in the source unit cache',
+    parser.add_argument('--source',
+                        help='Limit listings and actions to this source.',
                         type=str)
-    parser.add_argument('--source-unit-reset-last-embedded',
-                        help='Set the last embedded datetime to None, forcing the next embed',
+    parser.add_argument('--source-unit-id',
+                        help=('Limit listings and actions to this source unit id. '
+                              'It only makes sense if source is also defined with --source.'),
+                        type=str)
+
+    parser.add_argument('--list-source-units',
+                        help=('Pretty-print the rows in the source unit cache, '
+                              'possibly restricted to a single source if one is specified.'),
                         action='store_true')
-    parser.add_argument('--chunk-list-from-source',
-                        help='Pretty-print all the rows from a source in the chunk cache',
-                        type=str)
-    parser.add_argument('--chunk-list-from-source-unit',
-                        help=('Pretty-print all the rows from a source,source_unit '
-                              'in the chunk cache'),
-                        type=str)
-    parser.add_argument('--chunk-list-all',
-                        help='Pretty-print all the rows in the chunk cache',
+    parser.add_argument('--list-chunks',
+                        help=('Pretty-print the rows in the chunk cache, '
+                              'possibly restricted to a source [, source unit].'),
+                        action='store_true')
+    parser.add_argument('--reset-embedded',
+                        help=('Set the last embedded datetime to None, forcing the next embed, '
+                              'possibly restricted to a source [, source unit].'),
                         action='store_true')
     parser.add_argument('--chunk-reset-table',
                         help='Drop and recreate the chunk table',
                         action='store_true')
 
 
-# pylint: disable=too-many-branches
 def main(awd, args):
     from pprint import pprint
-    suc = awd.get_source_unit_cache()
-    if args['source_unit_list_from_source']:
-        for row in suc.get_by_source(source=args['source_units_from_source']):
+
+    source = args['source']
+    source_unit_id = args['source_unit_id']
+
+    if source_unit_id and not source:
+        awd.logger.error('Got source-unit-id but no source, please specify one.')
+        import sys
+        sys.exit(1)
+
+    source_unit_cache = awd.get_source_unit_cache()
+    chunk_cache = awd.get_chunk_cache()
+
+    if args['list_source_units']:
+        for row in source_unit_cache.list_rows(source=source):
             pprint(row)
 
-    if args['source_unit_reset_last_embedded']:
-        suc.reset_embedded()
-
-    cuc = awd.get_chunk_cache()
-    if args['chunk_list_from_source']:
-        for row in cuc.get_by_source(source=args['chunks_from_source']):
+    if args['list_chunks']:
+        for row in chunk_cache.list_rows(source=source,
+                                         source_unit_id=source_unit_id):
             row_copy = row.copy()
             if row_copy['vector']:
                 row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
             pprint(row_copy)
 
-    cuc = awd.get_chunk_cache()
-    if args['chunk_list_from_source_unit']:
-        source, source_unit_id = args['chunks_from_source_unit'].split(',')
-        for row in cuc.get_by_source_unit(source=source, source_unit_id=source_unit_id):
-            row_copy = row.copy()
-            if row_copy['vector']:
-                row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
-            pprint(row_copy)
-
-    if args['chunk_list_all']:
-        for row in cuc.get_all():
-            row_copy = row.copy()
-            if row_copy['vector']:
-                row_copy['vector'] = [row_copy['vector'][0], '...', row_copy['vector'][-1]]
-            pprint(row_copy)
+    if args['reset_embedded']:
+        source_unit_cache.reset_embedded(source=source,
+                                         source_unit_id=source_unit_id)
 
     if args['chunk_reset_table']:
-        cuc.reset_table(only_in_memory=False)
+        chunk_cache.reset_table(only_in_memory=False)
