@@ -19,9 +19,10 @@ class Payload(dict):
                  body: str,
                  source: str = '',
                  source_unit_id: str = '',
+                 uri: str = '',
                  categories: Union[Dict, str] = '[]',
-                 scope: str = '',
-                 context: str = '',
+                 scope: str = '',  # confidential, public
+                 context: str = '',  # historical, reference, internal_comm...
                  language: str = '',
                  headings: Union[List[str], str] = '[]',
                  created_by: str = '',
@@ -35,6 +36,7 @@ class Payload(dict):
         self['source'] = source
         self['source_unit_id'] = source_unit_id
         # Setters will validate and load json
+        self.uri = uri
         self.categories = categories
         self['scope'] = scope
         self['context'] = context
@@ -54,6 +56,7 @@ class Payload(dict):
         if name not in ('body',
                         'source',
                         'source_unit_id',
+                        'uri',
                         'categories',
                         'scope',
                         'context',
@@ -67,6 +70,8 @@ class Payload(dict):
 
         if 'timestamp' in name:
             value = T.timestamp_as_utc(value).isoformat()
+        elif name == 'uri':
+            value = T.validate_uri(value)
         elif name in ('categories', 'headings', 'metadata'):
             if isinstance(value, str):
                 value = json.loads(value)

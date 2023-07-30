@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointStruct
 
 from aword.model.embedder import Embedder
-from aword.chunk import Chunk
+from aword.chunk import Chunk, Payload
 from aword.segment import Segment
 
 
@@ -56,8 +56,8 @@ class Store(ABC):
                           source: str,
                           source_unit_id: str,
                           categories: str,
-                          scope: str,
-                          context: str,
+                          scope: str,  # confidential, public
+                          context: str,  # historical, reference, internal_comm...
                           language: str,
                           segments: List[Segment]) -> List[Chunk]:
 
@@ -209,7 +209,7 @@ class QdrantStore(Store):
                categories: Union[List[str], str] = None,
                scopes: Union[List[str], str] = None,
                contexts: Union[List[str], str] = None,
-               languages: Union[List[str], str] = None) -> List[Dict]:
+               languages: Union[List[str], str] = None) -> List[Payload]:
 
         out = self.client.search(collection_name=self.collection_name,
                                  query_vector=query_vector,
@@ -220,7 +220,7 @@ class QdrantStore(Store):
                                                                  contexts=contexts,
                                                                  languages=languages),
                                  limit=limit)
-        return [r.payload for r in out]
+        return [Payload(**(r.payload)) for r in out]
 
     def count(self,
               sources: Union[List[str], str] = None,
