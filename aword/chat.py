@@ -6,6 +6,12 @@ import aword.tools as T
 from aword.apis import oai
 
 
+class Chat:
+
+    def __init__(self):
+        pass
+
+
 def format_context(payload_dict):
     ctx_list = ['```']
 

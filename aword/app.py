@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Entry point to the Aword set of tools.
+"""Entry point to aWord.
 """
 
 import os
