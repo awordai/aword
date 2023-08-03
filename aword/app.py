@@ -267,9 +267,9 @@ class Awd:
 
         return self._chunk_cache
 
-    def update_cache(self):
-        sources = ['local', 'notion']
-        for source_name in sources:
+    def update_cache(self,
+                     sources: List[str] = None):
+        for source_name in sources or ['local', 'notion']:
             processor = import_module(f'aword.source.{source_name}')
             processor.add_to_cache(self)
 

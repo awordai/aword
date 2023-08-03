@@ -7,7 +7,7 @@ def test_update_cache(awd):
 
     awd.update_cache()
 
-    unembedded = suc.get_unembedded()
+    unembedded = suc.list_unembedded_rows()
     assert len(unembedded) == 14
 
     assert sum(len(source_unit['segments']) for source_unit in unembedded) == 74
@@ -18,5 +18,5 @@ def test_embed_and_store(awd, collection_name, ensure_empty_collection):
     awd.embed_and_store(collection_name=collection_name)
 
     suc = awd.get_source_unit_cache()
-    unembedded = suc.get_unembedded()
+    unembedded = suc.list_unembedded_rows()
     assert len(unembedded) == 0
