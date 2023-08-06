@@ -86,7 +86,7 @@ def chat_completion_request(messages: List[Dict],
         if not functions:
             raise E.AwordError(f'Cannot call function {call_function} if no functions are defined')
 
-        found_function = len([fdesk for fdesk in functions if fdesk['name'] == call_function]) == 1
+        found_function = len([fdesk for fdesk in functions if fdesk['name'] == call_function])
         if not found_function:
             raise E.AwordError(f'Cannot call undefined function {call_function}')
         if found_function > 1:
