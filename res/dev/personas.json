@@ -1,9 +1,17 @@
 {
-  "summarizer": {
-    "system_prompt": "You will be provided with a document, and your task is to write a summary. You should try to include action items and numerical values in the summary.  The summary should be in the same language as the document. The summary should not contain more than ${summary_words} words.",
+  "support": {
+    "system_prompt": "You are a helpful customer support agent.  Your job is to help customers, answering their questions. Your answers should be polite and suscinct, and they should not contain more than ${answer_words} words.",
     "user_prompt_preface": "Summarize the following text:\n\n",
+    "scopes": ["customer_support"],
     "model_name": "gpt-3.5-turbo",
-    "summary_words": 128,
+    "answer_words": 128,
+    "provider": "openai"
+  },
+  "expert": {
+    "system_prompt_file": "system-prompt-expert.txt",
+    "user_prompt_preface": "",
+    "scopes": ["confidential", "customer_support"],
+    "model_name": "gpt-4",
     "provider": "openai"
   }
 }

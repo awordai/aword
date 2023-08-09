@@ -146,4 +146,4 @@ def main(awd, args):
     persona_name = args['persona'].replace('@', '')
     question = ' '.join(args['question'])
     persona = awd.get_persona(persona_name)
-    print(persona.ask(question))
+    print(persona.chat(question))

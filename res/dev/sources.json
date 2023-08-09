@@ -4,7 +4,9 @@
       {
         "id": "7c1003c6426146a2ae485e8e3bfe600b",
         "doc": "Notion test pages",
-        "categories": ["historical"]
+        "categories": ["R&D"],
+        "scope": "confidential",
+        "context": "historical"
       }
     ]
   },
@@ -13,8 +15,9 @@
       "directory": "test/res/local",
       "extensions": ["md", "org", "txt"],
       "author": "unknown",
-      "categories": ["historical"],
-      "scope": "confidential"
+      "categories": ["wands"],
+      "scope": "confidential",
+      "context": "reference"
     },
     {
       "directory": "test/res/local/short",

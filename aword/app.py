@@ -19,14 +19,14 @@ import aword.errors as E
 class Awd:
 
     def __init__(self,
-                 environment_name: str,
+                 environment_name: str = '',
                  config_dir: str = None,
                  collection_name: str = None):
         self.config_dir = config_dir
         self.environment_name = environment_name
 
         self.logger = logging.getLogger('aword')
-        env_file = '.env.' + self.environment_name
+        env_file = '.env' + ('.' if environment_name else '') + environment_name
         if os.path.exists(env_file):
             self.logger.info('Loading env file %s', env_file)
             load_dotenv(env_file)
@@ -38,12 +38,14 @@ class Awd:
             'PRODUCTION': '',
             'CONFIG_DIR': '',
             'OPENAI_API_KEY': '',
+            'QDRANT_API_KEY': '',
+
             'CROWDDEV_TENANT_ID': '',
             'CROWDDEV_API_KEY': '',
             'LINEAR_API_KEY': '',
             'NOTION_API_KEY': '',
             'SLACK_BOT_TOKEN': '',
-            'QDRANT_API_KEY': ''
+            'SLACK_APP_TOKEN': ''
         }
         for env_name, env_val in os.environ.items():
             # Environment variables are as above but with an AWORD_ prefix
@@ -201,7 +203,7 @@ class Awd:
                 if 'system_prompt_file' not in config:
                     raise RuntimeError(f'Need a system prompt in the config of {persona_name}')
 
-                with open(config['system_prompt_file'], encoding='utf-8') as fin:
+                with open(self.find_config(config['system_prompt_file']), encoding='utf-8') as fin:
                     config['system_prompt'] = fin.read()
 
             if 'user_prompt_preface' not in config and 'user_prompt_preface_file' in config:
@@ -328,10 +330,11 @@ def app():
                               'action': 'store_true'},
         ('-d', '--debug'): {'help': 'Enable debug logs.',
                             'action': 'store_true'},
-        ('-e', '--environment'): {'help': ('Environment name. If set, for example, to test '
-                                           'the file .env.test will be loaded if existing.'),
+        ('-e', '--environment'): {'help': ('Environment name. If set, for example, to dev '
+                                           'the file .env.dev will be loaded if existing. '
+                                           'If not set the file .env will be loaded if existing.'),
                                   'type': str,
-                                  'default': 'dev'},
+                                  'default': ''},
         ('-L', '--error-logs-dir'): {'help': 'Directory for the error logs.',
                                      'type': str,
                                      'default': 'logs'},
