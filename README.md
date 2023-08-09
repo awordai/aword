@@ -1,6 +1,6 @@
 # aWord
 
-aWord is an OpenAI-GPT-powered information retrieval system that embeds pieces of information coming from several sources, stores the embeddings in a vector database, and enables querying based on the embeddings (RAG, Retrieval Augmentation Generation).
+aWord is an OpenAI-GPT-powered information retrieval system that caches pieces of information coming from several sources, stores their embeddings in a vector database, and enables querying based on the embeddings (RAG, Retrieval Augmentation Generation).
 
 It does this with particular care about data handling and compartimentalization, allowing the user to define scopes (like 'confidential', or 'public') and personas (which have access to scopes).
 
@@ -171,7 +171,6 @@ aword --environment dev --verbose chat @expert "how do inkjet printers work?"
 ```
 
 ```plaintext
-aword --environment dev -v chat @expert "how do inkjet printers work?"
 app:: Loading env file .env.dev
 app:: Found config file res/dev/personas.json
 app:: Found config file res/dev/system-prompt-expert.txt
