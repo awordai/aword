@@ -1,12 +1,16 @@
 # aWord
 
-aWord is an OpenAI-GPT-powered information retrieval system that caches pieces of information coming from several sources, stores their embeddings in a vector database, and enables querying based on the embeddings (RAG, Retrieval Augmentation Generation).
+**aWord** is a tool that integrates Language Learning Models (LLMs) with your company's data.
 
-It does this with particular care about data handling and compartimentalization, allowing the user to define scopes (like 'confidential', or 'public') and personas (which have access to scopes).
+By caching information from multiple sources, and embedding this data in a vector database, it allows you to work with OpenAI models using your data as background information.
 
-*aWord is pre-release alpha software.*
+aWord is designed from the ground up with data privacy and compartmentalization in mind. With the ability to define various scopes such as 'confidential' and 'public', and assign specific personas to them, you can ensure that interactions are both contextual and secure.
 
-## Running and configuration
+**Note:** aWord is currently in a pre-release alpha phase.
+
+## Setup and Configuration
+
+### Installation
 
 Install with:
 
@@ -16,7 +20,9 @@ cd aword
 pip install -e .
 ```
 
-aWord is intended to be run as a library, but you can also call it from the command line:
+### Usage
+
+While aWord is primarily designed to operate as a library, it can be invoked directly from the command line:
 
 ```bash
 aword -h
@@ -55,6 +61,8 @@ Commands:
     store
 ```
 
+You can also ask for help for any of the commands:
+
 ```bash
 aword app -h
 ```
@@ -68,7 +76,7 @@ options:
                  them in the vector database (default: False)
 ```
 
-### Environment
+### Environment Configuration
 
 aWord tries to load environment variables from `.env`, or `.env.test` when run by `pytest`.  When run from the command line the `--environment` option names an environment to load. For example,
 
@@ -76,9 +84,9 @@ aWord tries to load environment variables from `.env`, or `.env.test` when run b
 aword --environment dev
 ```
 
-will try to load `.env.dev`.
+will attempt to source `.env.dev`.
 
-The relevant environment variables are:
+#### Key Environment Variables:
 
 ```sh
 AWORD_TESTING
@@ -86,7 +94,6 @@ AWORD_PRODUCTION
 AWORD_CONFIG_DIR
 AWORD_OPENAI_API_KEY
 AWORD_QDRANT_API_KEY
-
 AWORD_CROWDDEV_TENANT_ID
 AWORD_CROWDDEV_API_KEY
 AWORD_LINEAR_API_KEY
@@ -95,15 +102,15 @@ AWORD_SLACK_BOT_TOKEN
 AWORD_SLACK_APP_TOKEN
 ```
 
-### Main configuration options
+### Primary Configuration Parameters
 
-Configuration files are searched for in the following directories, in this order:
+Configuration files will be sourced from these locations in the specified order:
 
-1. The current directory;
-2. The content of the `AWORD_CONFIG_DIR` environment variable;
+1. Current directory
+2. Value specified in `AWORD_CONFIG_DIR` environment variable
 3. `~/.aword/`
 
-The file `config.ini` file defines the following configuration options:
+Refer to `config.ini` for specific configuration details:
 
 ```ini
 [cache]
@@ -115,9 +122,7 @@ db_file = res/dev/cache.db
 provider = qdrant
 local_db = res/dev/local.qdrant
 collection_name = test-collection
-
-# if qdrant_url is defined we'll use it
-# url =
+# If qdrant_url is defined, it'll be utilized
 
 [embedding]
 model_name = text-embedding-ada-002
@@ -126,23 +131,23 @@ embedding_chunk_size = 400
 
 ## Functionality overview
 
-The functionality can be divided in two parts: ingestion, and data use.  Ingestion should happen regularly, possibly triggered by a cron.  It includes:
+The functionality can be divided in two parts: ingesting data, and appying it.  Ingestion should happen regularly, possibly triggered by a cron.  It includes:
 
-- Fetch information from sources (like notion, or local directories).  Each source has source units (a notion page, a file in a local directory).  Each source unit has a scope (like "confidential", or "customer_support"), a context (like "historical", or "reference") and one or more categories.
-- Parse the information into chunks.
-- Store the chunks and their provenance in a cache database.  The current version implements an edge cache based in SQLite.  The chunks are stored in a way that enables incremental fetching and parsing.
-- Create embeddings for the chunks and store them in a vector database.  The current implementation uses Qdrant.  Each chunk in the vector database knows the source unit from which it has been extracted, as well as its scope, context and categories.  When a source unit changes all its chunks are deleted from the vector database and new embeddings are stored.
+- Fetching information from sources (like notion, or local directories).  Each source has source units (a notion page, a file in a local directory).  Each source unit has a scope (like "confidential", or "customer_support"), a context (like "historical", or "reference") and one or more categories.
+- Parsing the information into semantically competent chunks.
+- Storing the chunks and their provenance in a cache database.  The current version implements an edge cache based in SQLite, but other caching options are planned.  The chunks are stored in a way that enables incremental fetching and parsing.
+- Creating embeddings for the chunks and storing them in a vector database.  The current implementation uses Qdrant.  Each chunk in the vector database knows the source unit from which it has been extracted, as well as its scope, context and categories.  When a source unit changes all its chunks are deleted from the vector database and new embeddings are stored.
 
-Data use includes:
+Data application includes:
 
-- Retrieve the relevant chunks to answer a query from the vector database, possibly given a scope, a context, and some categories.
-- Use the retrieved chunks as the background information to query a model, together with input from the user.
+- Retrieving from the vector database the relevant chunks to answer a query, possibly given a scope, a context, and some categories.
+- Using the retrieved chunks as the background information to query a model, together with input from the user.
 
 ### Personas
 
-A persona is an entity that has access to the chunks belonging to a set of scopes for use as background information, and can use them to query the model with customer questions.  You can define, for example, a persona that can only access the "customer_support" chunks.  This persona can safely answer customer questions without leaking data tagged as "confidential".
+A persona is an entity that has restricted access to a set of scopes.  You can define, for example, a persona that can only access data within the "customer_support" scope.  This persona can safely answer customer questions without leaking data in "confidential" scope.
 
-You can define personas with a json file `personas.json` in a config directory:
+Personas are defined in `personas.json`, in a configuration directory:
 
 ```json
 {
@@ -179,7 +184,7 @@ persona:: ask @expert: how do inkjet printers work?
 I'm sorry, but I'm unable to provide an answer to this question as there's no provided background information related to the functioning of inkjet printers.
 ```
 
-This is good, because the system prompt included
+This is a good answer, because the system prompt includes the following:
 
 ```plaintext
 Give an answer as specific as possible, deriving it from the background, and being careful not to say anything that cannot be inferred from the background.
@@ -187,8 +192,7 @@ Give an answer as specific as possible, deriving it from the background, and bei
 
 GPT-4 respects this, GPT-3.5 does not.
 
-
-### Configuration of sources
+### Data Source Configuration
 
 aWord can import data from several sources, defined in a `sources.json` configuration file.
 
@@ -245,18 +249,17 @@ The sources definition looks like this:
     }
   ]
 }
-
 ```
 
-### Access to the OpenAI API
+### OpenAI API Access
 
-The environment variable `AWORD_OPENAI_API_KEY` is always required.
+Ensure the `AWORD_OPENAI_API_KEY` environment variable is set.
 
 ### Embedding database API
 
-Embeddings are stored by default in a [Qdrant database](https://qdrant.tech).  If you have defined the `qdrant_local_db` configuration option it will use a (very slow) local database.  Otherwise you should define the `qdrant_url` option pointint to the endpoint of your database, and the environment variable `AWORD_QDRANT_API_KEY`.
+By default, embeddings are stored in [Qdrant database](https://qdrant.tech). Ensure either the `qdrant_local_db` or the `qdrant_url` options are set, along with the `AWORD_QDRANT_API_KEY` environment variable.
 
-## Dev
+## Development Environment Setup
 
 ```
 mkdir ~/venv/awo && python -m venv ~/venv/awo
