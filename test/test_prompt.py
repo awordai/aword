@@ -5,7 +5,7 @@ import time
 import socket
 
 import aword.tools as T
-from aword.chat import format_context
+# from aword.chat import format_context
 
 
 def update_modification_time(directory):

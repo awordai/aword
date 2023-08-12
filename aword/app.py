@@ -62,6 +62,7 @@ class Awd:
         self._store = {}
         self._source_unit_cache = None
         self._chunk_cache = None
+        self._chatdb = None
 
     def getenv(self, varname):
         return self.environment.get(varname.upper(), '')
@@ -308,6 +309,15 @@ class Awd:
             total_chunks += len(chunks)
 
         self.logger.info('Added %d chunks', total_chunks)
+
+    def get_chatdb(self):
+        if self._chatdb is None:
+            chatdb_config = self.get_config('chatdb')
+            provider = chatdb_config.get('provider', 'chatsqlite')
+            processor = import_module(f'aword.chatdb.{provider}')
+            self._chatdb = processor.make_chat_db(**chatdb_config)
+
+        return self._chatdb
 
 
 def add_args(parser):

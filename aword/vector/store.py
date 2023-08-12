@@ -16,6 +16,9 @@ from aword.segment import Segment
 def make_store(awd,
                collection_name: str,
                config: Dict):
+    """In a multi-tenant environment the collection_name is the
+    tenant_id.
+    """
     provider = config.get('provider', 'qdrant')
     if provider == 'qdrant':
         # collection_name can come in the config, overriding it if so.
