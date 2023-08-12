@@ -129,8 +129,10 @@ class OAIPersona(Persona):
     def get_param(self, parname: str):
         return self.params[parname]
 
-    def chat(self, text: str):
-        self.logger.info('ask @%s: %s', self.persona_name, text[:60])
-        return oai.chat(model_name=self.model_name,
-                        system_prompt=self.system_prompt,
-                        user_prompt=self.user_prompt_preface + text)
+    def reply(self, text: str):
+        self.logger.info('@%s asked: %s', self.persona_name, text[:80])
+        out = oai.chat(model_name=self.model_name,
+                       system_prompt=self.system_prompt,
+                       user_prompt=self.user_prompt_preface + text)
+        self.logger.info('@%s reply: %s', self.persona_name, out[:80])
+        return out
