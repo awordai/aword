@@ -9,13 +9,13 @@ import sqlite3
 
 import aword.errors as E
 
-from aword.chatdb.chatdb import ChatDB
+from aword.chat.chat import Chat
 
 
 DbConnection = None
 
 
-def make_chat_db(**kw):
+def make_chat(**kw):
     return ChatSQLite(db_file=kw.get('db_file', None))
 
 
@@ -41,7 +41,7 @@ def close_connection():
         DbConnection = None
 
 
-class ChatSQLite(ChatDB):
+class ChatSQLite(Chat):
 
     def __init__(self, db_file=None):
         self.db_file = db_file

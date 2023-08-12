@@ -62,7 +62,7 @@ class Awd:
         self._store = {}
         self._source_unit_cache = None
         self._chunk_cache = None
-        self._chatdb = None
+        self._chat = None
 
     def getenv(self, varname):
         return self.environment.get(varname.upper(), '')
@@ -310,14 +310,14 @@ class Awd:
 
         self.logger.info('Added %d chunks', total_chunks)
 
-    def get_chatdb(self):
-        if self._chatdb is None:
-            chatdb_config = self.get_config('chatdb')
-            provider = chatdb_config.get('provider', 'chatsqlite')
-            processor = import_module(f'aword.chatdb.{provider}')
-            self._chatdb = processor.make_chat_db(**chatdb_config)
+    def get_chat(self):
+        if self._chat is None:
+            chat_config = self.get_config('chat')
+            provider = chat_config.get('provider', 'chatsqlite')
+            processor = import_module(f'aword.chat.{provider}')
+            self._chat = processor.make_chat(**chat_config)
 
-        return self._chatdb
+        return self._chat
 
 
 def add_args(parser):
@@ -383,14 +383,14 @@ def app():
     # configured. Otherwise they could get an unconfigured logger.
     import aword.source.notion
     import aword.source.local
-    import aword.model.persona
+    import aword.chat.chat
     import aword.model.respondent
     import aword.cache.cache
     import aword.vector.store
     commands = {
         'notion': aword.source.notion,
         'local': aword.source.local,
-        'chat': aword.model.persona,
+        'chat': aword.chat.chat,
         'ask': aword.model.respondent,
         'cache': aword.cache.cache,
         'store': aword.vector.store

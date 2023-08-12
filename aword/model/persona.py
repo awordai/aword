@@ -134,16 +134,3 @@ class OAIPersona(Persona):
         return oai.chat(model_name=self.model_name,
                         system_prompt=self.system_prompt,
                         user_prompt=self.user_prompt_preface + text)
-
-
-def add_args(parser):
-    import argparse
-    parser.add_argument('persona', help='Persona')
-    parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
-
-
-def main(awd, args):
-    persona_name = args['persona'].replace('@', '')
-    question = ' '.join(args['question'])
-    persona = awd.get_persona(persona_name)
-    print(persona.chat(question))
