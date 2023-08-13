@@ -2,10 +2,11 @@
 """Ask questions to a respondent.
 """
 import string
+import time
 from typing import Dict
 
 from aword.apis import oai
-
+import aword.errors as E
 
 def make_respondent(awd,
                     respondent_name: str,
@@ -47,17 +48,37 @@ class OAIRespondent:
 
     def ask(self,
             text: str,
-            temperature: float = 1):
-        self.logger.info('ask @%s: %s', self.respondent_name, text[:80].replace('\n', ''))
-        return oai.chat_completion_request(
-            messages=[{'role': 'system',
-                       'content': self.system_prompt},
-                      {'role': 'user',
-                       'content': self.user_prompt_preface + text}],
-            functions=[self.call_function],
-            call_function=self.call_function['name'],
-            model_name=self.model_name,
-            temperature=temperature)
+            temperature: float = 1,
+            attempts: int = 2):
+        self.logger.info('Asked @%s: %s',
+                         self.respondent_name,
+                         text[:80].replace('\n', ' '))
+        try:
+            out = oai.chat_completion_request(
+                messages=[{'role': 'system',
+                           'content': self.system_prompt},
+                          {'role': 'user',
+                           'content': self.user_prompt_preface + text}],
+                functions=[self.call_function],
+                call_function=self.call_function['name'],
+                model_name=self.model_name,
+                temperature=temperature)
+        except Exception as e:
+            # This means that the request was not correctly formed, do not try again
+            if isinstance(e, E.AwordModelRequestError):
+                raise
+            if attempts:
+                time.sleep(0.5)
+                return self.ask(text, temperature, attempts-1)
+
+            out = {'success': False,
+                   'reply': 'Failed at generating reply'}
+
+        self.logger.info('Replied @%s: %s, %s',
+                         self.respondent_name,
+                         'success' if out['success'] else 'failure',
+                         out['reply'][:80])
+        return out
 
 
 def add_args(parser):

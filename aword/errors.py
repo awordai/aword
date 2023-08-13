@@ -15,3 +15,7 @@ class AwordFetchError(AwordError):
 
 class AwordPermissionError(AwordError):
     status_code = 403
+
+
+class AwordModelRequestError(Exception):
+    status_code = 400

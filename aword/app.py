@@ -147,7 +147,8 @@ class Awd:
                         else:
                             self.config[s][key] = int(value)
                     except ValueError:
-                        pass
+                        self.logger.error('Error parsing config section %s with key %s value %s',
+                                          section, key, value)
 
         return self.config.get(section, {})
 

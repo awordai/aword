@@ -6,6 +6,8 @@ from typing import Dict, List
 import uuid
 import logging
 import sqlite3
+from datetime import datetime
+from pytz import utc
 
 import aword.errors as E
 
@@ -43,7 +45,8 @@ def close_connection():
 
 class ChatSQLite(Chat):
 
-    def __init__(self, db_file=None):
+    def __init__(self, awd, db_file=None):
+        super().__init__(awd)
         self.db_file = db_file
         self.connection = get_connection(self.db_file)
         self._init_tables()
@@ -54,7 +57,8 @@ class ChatSQLite(Chat):
         CREATE TABLE IF NOT EXISTS chat (
             id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL,
-            user_id TEXT NOT NULL
+            user_id TEXT NOT NULL,
+            created_timestamp TIMESTAMP
         )
         ''')
 
@@ -64,6 +68,7 @@ class ChatSQLite(Chat):
             chat_id TEXT NOT NULL,
             role TEXT NOT NULL,
             content TEXT NOT NULL,
+            created_timestamp TIMESTAMP,
             FOREIGN KEY (chat_id) REFERENCES chat(id)
         )
         ''')
@@ -73,8 +78,8 @@ class ChatSQLite(Chat):
         chat_id = str(uuid.uuid4())
         cursor = self.connection.cursor()
         cursor.execute('''
-        INSERT INTO chat (id, tenant_id, user_id) VALUES (?, ?, ?)
-        ''', (chat_id, tenant_id, user_id))
+        INSERT INTO chat (id, tenant_id, user_id, created_timestamp) VALUES (?, ?, ?, ?)
+        ''', (chat_id, tenant_id, user_id, datetime.now(utc).isoformat()))
         self.connection.commit()
         return chat_id
 
@@ -82,14 +87,16 @@ class ChatSQLite(Chat):
         cursor = self.connection.cursor()
         for message in messages:
             cursor.execute('''
-            INSERT INTO message (chat_id, role, content) VALUES (?, ?, ?)
-            ''', (chat_id, message['role'], message['content']))
+            INSERT INTO message (chat_id, role, content, created_timestamp) VALUES (?, ?, ?, ?)
+            ''', (chat_id, message['role'], message['content'], datetime.now(utc).isoformat()))
         self.connection.commit()
 
     def get_messages(self, chat_id: str) -> List[Dict]:
+        """Returns the messages belonging to a chat, most recent last.
+        """
         cursor = self.connection.cursor()
         cursor.execute('''
-        SELECT role, content FROM message WHERE chat_id = ?
+        SELECT role, content FROM message WHERE chat_id = ? ORDER BY created_timestamp ASC
         ''', (chat_id,))
         rows = cursor.fetchall()
         return [{'role': row['role'], 'content': row['content']} for row in rows]

@@ -114,7 +114,7 @@ def chat_completion_request(messages: List[Dict],
         return {'reply': response['content'],
                 'success': True}
     except openai.InvalidRequestError as exc:
-        raise E.AwordError('Invalid request error from OpenAI') from exc
+        raise E.AwordModelRequestError('Invalid request error from OpenAI') from exc
 
 
 def get_tokenizer(encoding) -> Any:
