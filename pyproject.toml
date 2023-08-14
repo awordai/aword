@@ -25,7 +25,8 @@ dependencies = [
     "langdetect >= 1.0.9",
     "tiktoken",
     "pytz",
-    "sentence_transformers"
+    "sentence_transformers",
+    "gnureadline"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

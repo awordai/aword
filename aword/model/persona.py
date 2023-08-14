@@ -246,7 +246,7 @@ class OAIPersona(Persona):
         if out.get('call_function', '') == self.background_function['name']:
             self.logger.info('Model requested background information')
             if message_history:
-                summary_text = out.get('with_arguments', '')
+                summary_text = out.get('with_arguments', {})['summary_text']
                 if not summary_text:
                     self.logger.error('Did not receive with_arguments from the model')
                 else:
