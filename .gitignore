@@ -166,6 +166,7 @@ cython_debug/
 
 test/res/last-seen.json
 test/res/local.qdrant
+res/dev/local.qdrant
 **/.emacs-bu/*
 /sources.json
 /tmp

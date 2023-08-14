@@ -13,6 +13,12 @@ breadcrumbs: Header > Sub-header > Sub-sub-header (optional)
 body: multiple lines of text, or a piece of code
 ```
 
+# Formatting:
+
+- Write using Markdown
+- Display links like this: <http://www.example.com|This message is a link>
+- Provide the answer in the language in which the question was asked.
+
 # Your instructions:
 
 - Give an answer as specific as possible, deriving it from the background, and being careful not to say anything that cannot be inferred from the background.
@@ -20,9 +26,3 @@ body: multiple lines of text, or a piece of code
 - Then use background elements with fact_type == historical to add information about the history leading to the current state, taking their timestamp into account.
 - Add references to the relevant background elements, using their URL or file.
 - Be concise. If there is nothing to say about the question simply say so, do not attempt to summarize the background.
-
-# Formatting:
-
-- Write using Markdown
-- Display links like this: <http://www.example.com|This message is a link>
-- Provide the answer in the language in which the question was asked.

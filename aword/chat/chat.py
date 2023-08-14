@@ -38,7 +38,8 @@ class Chat(ABC):
                   tenant_id: str,
                   user_id: str,
                   user_query: str,
-                  chat_id: str = None) -> Dict:
+                  chat_id: str = None,
+                  attempts: int = 2) -> Dict:
         if chat_id is None:
             chat_id = self.new_chat(tenant_id, user_id)
             message_history = []
@@ -47,33 +48,60 @@ class Chat(ABC):
 
         persona = self.awd.get_persona(persona_name)
         try:
-            reply = persona.tell(user_query, message_history)
-            self.append_messages(chat_id=chat_id,
-                                 messages=[{'role': 'user',
-                                            'content': user_query},
-                                           {'role': 'assistant',
-                                            'name': persona_name,
-                                            'content': reply}])
+            reply = persona.tell(user_query, message_history, collection_name=tenant_id)
         except Exception as e:
             self.awd.logger.error('Failed getting reply from %s, chat_id %s, user_query %s: \n%s',
                                   persona_name, chat_id, user_query, str(e))
-            return {'reply': f'Failed at getting reply from {persona_name}',
+            return {'reply': f'Failed at getting reply from {persona_name} for {user_query}',
                     'success': False,
                     'chat_id': chat_id}
 
-        return {'reply': reply,
-                'success': True,
-                'chat_id': chat_id}
+        if reply['success']:
+            self.awd.logger.info('Storing messages')
+            self.append_messages(chat_id=chat_id,
+                                 messages=[{'role': 'user',
+                                            'said': reply['user_says'],
+                                            'background': reply['background']},
+                                           {'role': 'assistant',
+                                            'name': persona_name,
+                                            'said': reply['reply']}])
+            reply['chat_id'] = chat_id
+            return reply
+
+        if attempts:
+            return self.user_says(persona_name=persona_name,
+                                  tenant_id=tenant_id,
+                                  user_id=user_id,
+                                  user_query=user_query,
+                                  chat_id=chat_id,
+                                  attempts=attempts - 1)
+
+        return reply
+
+
 
 
 def add_args(parser):
+    import getpass
     import argparse
+    parser.add_argument('--tenant-id',
+                        help=('Tenant id'),
+                        type=str,
+                        default='local')
+    parser.add_argument('--user-id',
+                        help=('User id'),
+                        type=str,
+                        default=getpass.getuser())
     parser.add_argument('persona', help='Persona')
     parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
 
 
 def main(awd, args):
+    chat = awd.get_chat()
     persona_name = args['persona'].replace('@', '')
     question = ' '.join(args['question'])
-    persona = awd.get_persona(persona_name)
-    print(persona.chat(question))
+    from pprint import pprint
+    pprint(chat.user_says(persona_name=persona_name,
+                          tenant_id=args['tenant_id'],
+                          user_id=args['user_id'],
+                          user_query=question))

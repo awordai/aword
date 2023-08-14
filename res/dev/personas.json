@@ -10,6 +10,7 @@
   "expert": {
     "system_prompt_file": "system-prompt-expert.txt",
     "user_prompt_preface": "",
+    "require_background": false,
     "scopes": ["confidential", "customer_support"],
     "model_name": "gpt-4",
     "provider": "openai"

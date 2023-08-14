@@ -223,6 +223,7 @@ class QdrantStore(Store):
                                                                  contexts=contexts,
                                                                  languages=languages),
                                  limit=limit)
+
         return [Payload(**(r.payload)) for r in out]
 
     def count(self,

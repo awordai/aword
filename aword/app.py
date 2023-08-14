@@ -147,8 +147,7 @@ class Awd:
                         else:
                             self.config[s][key] = int(value)
                     except ValueError:
-                        self.logger.error('Error parsing config section %s with key %s value %s',
-                                          section, key, value)
+                        pass
 
         return self.config.get(section, {})
 
@@ -316,7 +315,7 @@ class Awd:
             chat_config = self.get_config('chat')
             provider = chat_config.get('provider', 'chatsqlite')
             processor = import_module(f'aword.chat.{provider}')
-            self._chat = processor.make_chat(**chat_config)
+            self._chat = processor.make_chat(self, **chat_config)
 
         return self._chat
 

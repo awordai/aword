@@ -17,8 +17,8 @@ from aword.chat.chat import Chat
 DbConnection = None
 
 
-def make_chat(**kw):
-    return ChatSQLite(db_file=kw.get('db_file', None))
+def make_chat(awd, **kw):
+    return ChatSQLite(awd, db_file=kw.get('db_file', None))
 
 
 def get_connection(fname=None):
@@ -67,7 +67,8 @@ class ChatSQLite(Chat):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id TEXT NOT NULL,
             role TEXT NOT NULL,
-            content TEXT NOT NULL,
+            said TEXT NOT NULL,
+            background TEXT,
             created_timestamp TIMESTAMP,
             FOREIGN KEY (chat_id) REFERENCES chat(id)
         )
@@ -87,8 +88,13 @@ class ChatSQLite(Chat):
         cursor = self.connection.cursor()
         for message in messages:
             cursor.execute('''
-            INSERT INTO message (chat_id, role, content, created_timestamp) VALUES (?, ?, ?, ?)
-            ''', (chat_id, message['role'], message['content'], datetime.now(utc).isoformat()))
+            INSERT INTO message (chat_id, role, said, background, created_timestamp)
+            VALUES (?, ?, ?, ?, ?)
+            ''', (chat_id,
+                  message['role'],
+                  message['said'],
+                  message.get('background', ''),
+                  datetime.now(utc).isoformat()))
         self.connection.commit()
 
     def get_messages(self, chat_id: str) -> List[Dict]:
@@ -96,7 +102,9 @@ class ChatSQLite(Chat):
         """
         cursor = self.connection.cursor()
         cursor.execute('''
-        SELECT role, content FROM message WHERE chat_id = ? ORDER BY created_timestamp ASC
+        SELECT role, said, background FROM message WHERE chat_id = ?
+        ORDER BY created_timestamp ASC
         ''', (chat_id,))
         rows = cursor.fetchall()
-        return [{'role': row['role'], 'content': row['content']} for row in rows]
+        return [{'role': row['role'],
+                 'content': row['background'] + row['said']} for row in rows]

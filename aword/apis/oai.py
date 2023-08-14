@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
+from pprint import pformat
 from typing import List, Any, Dict
 
 import openai
@@ -95,6 +97,8 @@ def chat_completion_request(messages: List[Dict],
         args['function_call'] = {'name': call_function}
 
     try:
+        logger = logging.getLogger(__name__)
+        logger.debug('Calling openai.ChatCompletion with:\n\n%s', pformat(args))
         response = openai.ChatCompletion.create(**args)["choices"][0]["message"]
         function_call = response.get('function_call', None)
         if function_call:

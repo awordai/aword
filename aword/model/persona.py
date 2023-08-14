@@ -5,13 +5,12 @@
 from abc import ABC, abstractmethod
 import string
 from enum import Enum
-import time
+from pprint import pformat
 from typing import Dict, List, Union
 
 import aword.tools as T
 from aword.apis import oai
 from aword.chunk import Payload
-import aword.errors as E
 
 
 def make_persona(awd,
@@ -33,7 +32,8 @@ class Persona(ABC):
                  chunks_for_last_query: int = 10,
                  chunks_per_conversation: int = 20,
                  delimiter: str = '```',
-                 background_fields: List[Union[str, tuple]] = None):
+                 background_fields: List[Union[str, tuple]] = None,
+                 require_background=True):
         """The chunks per conversation are divided in two groups:
         chunks_for_last_query will be semantically similar the last
         query only, and the rest up to chunks_per_conversation will be
@@ -55,6 +55,7 @@ class Persona(ABC):
             ('headings', 'Breadcrumbs', ' > '),
             ('uri', 'URL or file'),
             'body')
+        self.require_background = require_background
 
     def format_background(self, payloads: List[Payload]) -> List[str]:
 
@@ -96,26 +97,30 @@ class Persona(ABC):
     def get_background(self,
                        user_query: str,
                        message_history: List[Dict],
+                       collection_name: str = None,
                        sources: Union[List[str], str] = None,
                        source_unit_ids: Union[List[str], str] = None,
                        categories: Union[List[str], str] = None,
                        contexts: Union[List[str], str] = None,
                        languages: Union[List[str], str] = None) -> str:
         embedder = self.awd.get_embedder()
-        store = self.awd.get_store()
+        store = self.awd.get_store(collection_name=collection_name)
 
-        historical_background = store.search(
-            query_vector=embedder.get_embeddings([msg['content'] for msg in message_history]),
-            limit=self.chunks_per_conversation - self.chunks_for_last_query,
-            sources=sources,
-            source_unit_ids=source_unit_ids,
-            categories=categories,
-            scopes=self.scopes,
-            contexts=contexts,
-            languages=languages)
+        historical_background = []
+        if message_history:
+            historical_background = store.search(
+                query_vector=embedder.get_embeddings([msg['content']
+                                                      for msg in message_history])[0],
+                limit=self.chunks_per_conversation - self.chunks_for_last_query,
+                sources=sources,
+                source_unit_ids=source_unit_ids,
+                categories=categories,
+                scopes=self.scopes,
+                contexts=contexts,
+                languages=languages)
 
         user_query_background = store.search(
-            query_vector=embedder.get_embeddings([user_query]),
+            query_vector=embedder.get_embeddings([user_query])[0],
             limit=self.chunks_for_last_query,
             sources=sources,
             source_unit_ids=source_unit_ids,
@@ -124,8 +129,14 @@ class Persona(ABC):
             contexts=contexts,
             languages=languages)
 
-        return '\n'.join(self.format_background(historical_background) +
-                         self.format_background(user_query_background))
+        background = (self.format_background(historical_background) +
+                      self.format_background(user_query_background))
+        if background:
+            background_str = '\n'.join(background)
+            return f"\n\nBackground information:\n\n{background_str}\n\n"
+
+        self.awd.logger.warning('No background available')
+        return '\n\nNo more background available.\n\n'
 
     @abstractmethod
     def tell(self,
@@ -161,6 +172,21 @@ class OAIPersona(Persona):
         self.params = params
         self.system_prompt = string.Template(system_prompt).substitute(params)
         self.user_prompt_preface = string.Template(user_prompt_preface).substitute(params)
+        self.background_function = {
+            "name": "get_background_information",
+            "description": "Get relevant background information to generate a correct answer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary_text": {
+                        "type": "string",
+                        "description": ("A description of what the required "
+                                        "background information is for.")
+                    }
+                },
+                "required": ["summary_text"]
+            }
+        }
 
     def get_param(self, parname: str):
         return self.params[parname]
@@ -168,86 +194,73 @@ class OAIPersona(Persona):
     def tell(self,
              user_query: str,
              message_history: List[Dict],
+             collection_name: str = None,
              temperature: float = 1,
-             attempts: int = 3,
              background: str = '') -> Dict:
-        functions = [
-            {
-                "name": "get_background_information",
-                "description": "Get relevant background information to generate a correct answer.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "summary_text": {
-                            "type": "string",
-                            "description": ("A description of what the required "
-                                            "background information is for.")
-                        }
-                    },
-                    "required": ["summary_text"]
-                }
-            }
-        ]
+
         self.logger.info('Told @%s (%s): %s',
                          self.persona_name,
-                         'no background' if not background else ('background %d words' %
+                         'no background' if not background else ('%d words background' %
                                                                  len(background.split())),
                          user_query[:80].replace('\n', ' '))
 
-        try:
-            messages = message_history.copy() if message_history else [
-                {'role': 'system',
-                 'content': self.system_prompt}]
+        if self.require_background and not background:
+            self.logger.info('Requesting to ask for background')
+            functions = [self.background_function]
+            ask_for_background = ('\n- If you do not have enough background information, '
+                                  'or if the background information does not appear '
+                                  f"to be relevant, call the {self.background_function['name']} "
+                                  'function.')
+            self.logger.info('Calling completion with %s', self.background_function['name'])
+        else:
+            functions = []
+            ask_for_background = ''
+            self.logger.info('Calling completion without background information function')
 
-            user_content = user_query
-            if background:
-                user_content = f'Background information:\n\n{background}\n\n{user_query}'
-                functions = []
+        # The system prompt is not stored with the chat, so it will
+        # not come. That enables the same conversation to be shared
+        # between several personas
+        messages = [{'role': 'system',
+                     'content': self.system_prompt + ask_for_background},
+                    *message_history]
 
-            user_preface = self.user_prompt_preface + '\n\n' if not message_history else ''
+        user_says = user_query
+        if not message_history and self.user_prompt_preface:
+            user_says = self.user_prompt_preface + '\n\n' + user_query
 
-            messages.append({'role': 'user',
-                             'content': user_preface + user_content})
+        messages.append({'role': 'user',
+                         'content': background + user_says})
 
-            out = oai.chat_completion_request(
-                messages=messages,
-                functions=functions,
-                model_name=self.model_name,
-                temperature=temperature)
+        out = oai.chat_completion_request(messages=messages,
+                                          functions=functions,
+                                          model_name=self.model_name,
+                                          temperature=temperature)
 
-            if out.get('call_function', '') == 'get_background_information':
-                self.logger.info('Model requested background information')
-                if message_history:
-                    summary_text = out.get('with_arguments', '')
-                    if not summary_text:
-                        self.logger.error('Did not receive with_arguments from the model')
-                    else:
-                        summary_text = summary_text + '\n\n'
+        if out.get('call_function', '') == self.background_function['name']:
+            self.logger.info('Model requested background information')
+            if message_history:
+                summary_text = out.get('with_arguments', '')
+                if not summary_text:
+                    self.logger.error('Did not receive with_arguments from the model')
                 else:
-                    summary_text = ''
+                    summary_text = summary_text + '\n\n'
+            else:
+                summary_text = ''
 
-                return self.tell(user_query=user_query,
+            return self.tell(user_query=user_query,
+                             message_history=message_history,
+                             collection_name=collection_name,
+                             temperature=temperature,
+                             background=self.get_background(
+                                 user_query=summary_text + user_query,
                                  message_history=message_history,
-                                 temperature=temperature,
-                                 attempts=attempts,
-                                 background=self.get_background(
-                                     user_query=summary_text + user_query,
-                                     message_history=message_history))
-
-        except Exception as e:
-            # This means that the request was not correctly formed, do not try again
-            if isinstance(e, E.AwordModelRequestError):
-                raise
-            if attempts:
-                time.sleep(0.5)
-                return self.tell(user_query=user_query,
-                                 message_history=message_history,
-                                 temperature=temperature,
-                                 attempts=attempts,
-                                 background=background)
+                                 collection_name=collection_name))
 
         self.logger.info('Replied @%s: %s, %s',
                          self.persona_name,
                          'success' if out['success'] else 'failure',
                          out['reply'][:80])
+
+        out['user_says'] = user_says
+        out['background'] = background
         return out
