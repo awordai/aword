@@ -59,6 +59,7 @@ class Store(ABC):
                           embedder: Embedder,
                           source: str,
                           source_unit_id: str,
+                          uri: str,
                           categories: str,
                           scope: str,  # confidential, public
                           context: str,  # historical, reference, internal_comm...
@@ -80,6 +81,7 @@ class Store(ABC):
             for chunk in chunks:
                 chunk.payload.source = source
                 chunk.payload.source_unit_id = source_unit_id
+                chunk.payload.uri = uri
                 chunk.payload.categories = categories
                 chunk.payload.scope = scope
                 chunk.payload.context = context

@@ -292,6 +292,7 @@ class Awd:
             chunks = store.store_source_unit(embedder,
                                              source=source_unit['source'],
                                              source_unit_id=source_unit['source_unit_id'],
+                                             uri=source_unit['uri'],
                                              categories=source_unit['categories'],
                                              scope=source_unit['scope'],
                                              context=source_unit['context'],
