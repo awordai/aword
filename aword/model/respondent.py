@@ -72,13 +72,16 @@ class OAIRespondent:
                 return self.ask(text, temperature, attempts-1)
 
             out = {'success': False,
-                   'reply': 'Failed at generating reply'}
+                   'reply': 'Failed at generating reply',
+                   'arguments': {}}
 
         self.logger.info('Replied @%s: %s, %s',
                          self.respondent_name,
                          'success' if out['success'] else 'failure',
-                         out['reply'][:80])
-        return out
+                         out['with_arguments']['summary'][:80])
+        return {'success': True,
+                'reply': out['with_arguments']['summary'],
+                'language': out['with_arguments']['language']}
 
 
 def add_args(parser):

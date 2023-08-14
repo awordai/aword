@@ -24,11 +24,11 @@ DbConnection = None
 
 
 def make_source_unit_cache(summarizer=None, **kw):
-    return SourceUnitDB(summarizer, fname=kw.get('db_file', None))
+    return SourceUnitDB(summarizer, db_file=kw.get('db_file', None))
 
 
 def make_chunk_cache(**kw):
-    return ChunkDB(fname=kw.get('db_file', None))
+    return ChunkDB(db_file=kw.get('db_file', None))
 
 
 def get_connection(fname=None):
@@ -100,14 +100,14 @@ def limit_query(query: str,
 
 
 class SourceUnitDB(Cache):
-    def __init__(self, summarizer=None, fname=None):
+    def __init__(self, summarizer=None, db_file=None):
         super().__init__(summarizer)
 
-        self.conn = get_connection(fname)
+        self.conn = get_connection(db_file)
         self.logger = logging.getLogger(__name__)
         self.create_table()
         self.create_history_table()
-        self.fname = fname
+        self.db_file = db_file
 
     def create_table(self):
         self.conn.execute("""
@@ -135,7 +135,7 @@ class SourceUnitDB(Cache):
     def reset_tables(self, only_in_memory=True):
         logger = logging.getLogger(__name__)
 
-        if not (self.fname is None and only_in_memory):
+        if not (self.db_file is None and only_in_memory):
             logger.warning('Refusing to drop persistent tables without `only_in_memory` argument')
             return
         try:
@@ -408,14 +408,14 @@ class SourceUnitDB(Cache):
 
 class ChunkDB:
 
-    def __init__(self, fname=None):
-        self.conn = get_connection(fname)
+    def __init__(self, db_file=None):
+        self.conn = get_connection(db_file)
         self.table_name = 'chunk'
 
         self.logger = logging.getLogger(__name__)
 
         self.create_table()
-        self.fname = fname
+        self.db_file = db_file
 
     def create_table(self):
         self.conn.execute(f"""
@@ -436,8 +436,7 @@ class ChunkDB:
     def reset_table(self, only_in_memory=True):
         logger = logging.getLogger(__name__)
 
-        if self.fname is not None and only_in_memory:
-            print(self.fname, only_in_memory)
+        if self.db_file is not None and only_in_memory:
             logger.warning('Refusing to drop persistent chunk table '
                            'without `only_in_memory` argument')
             return

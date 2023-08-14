@@ -171,4 +171,5 @@ res/dev/local.qdrant
 /sources.json
 /tmp
 **/cache.db
+res/qtc/*
 
