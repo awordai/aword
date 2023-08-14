@@ -87,7 +87,7 @@ def add_args(parser):
     parser.add_argument('--tenant-id',
                         help=('Tenant id'),
                         type=str,
-                        default='local')
+                        default='test-collection')
     parser.add_argument('--user-id',
                         help=('User id'),
                         type=str,
@@ -100,8 +100,11 @@ def main(awd, args):
     chat = awd.get_chat()
     persona_name = args['persona'].replace('@', '')
     question = ' '.join(args['question'])
-    from pprint import pprint
-    pprint(chat.user_says(persona_name=persona_name,
-                          tenant_id=args['tenant_id'],
-                          user_id=args['user_id'],
-                          user_query=question))
+    reply = chat.user_says(persona_name=persona_name,
+                           tenant_id=args['tenant_id'],
+                           user_id=args['user_id'],
+                           user_query=question)
+    if reply['success']:
+        print(reply['reply'])
+    else:
+        print('Failed at getting an answer')

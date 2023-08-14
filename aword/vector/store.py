@@ -2,6 +2,7 @@
 
 import uuid
 from typing import List, Dict, Union
+from pprint import pformat
 from abc import ABC, abstractmethod
 
 from qdrant_client import models
@@ -202,6 +203,8 @@ class QdrantStore(Store):
                         match=models.MatchValue(value=value),
                     )
                 conditions.append(condition)
+
+        self.logger.debug('Vector search filter conditions:\n\n%s', pformat(conditions))
         return models.Filter(must=conditions)
 
     def search(self,
@@ -214,6 +217,9 @@ class QdrantStore(Store):
                contexts: Union[List[str], str] = None,
                languages: Union[List[str], str] = None) -> List[Payload]:
 
+        self.logger.info('Searching %s %s',
+                         self.collection_name,
+                         ('with scopes ' + ', '.join(scopes)) if scopes else 'without scopes')
         out = self.client.search(collection_name=self.collection_name,
                                  query_vector=query_vector,
                                  query_filter=self.create_filter(sources=sources,
@@ -223,6 +229,8 @@ class QdrantStore(Store):
                                                                  contexts=contexts,
                                                                  languages=languages),
                                  limit=limit)
+
+        self.logger.debug('Vector search replied:\n\n%s', pformat(out))
 
         return [Payload(**(r.payload)) for r in out]
 
