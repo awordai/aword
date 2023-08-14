@@ -5,7 +5,6 @@
 from abc import ABC, abstractmethod
 import string
 from enum import Enum
-from pprint import pformat
 from typing import Dict, List, Union
 
 import aword.tools as T
@@ -198,24 +197,32 @@ class OAIPersona(Persona):
              temperature: float = 1,
              background: str = '') -> Dict:
 
+        if self.require_background:
+            if not background:
+                if not message_history:
+                    self.logger.info('Getting background for the first message')
+                    background = self.get_background(
+                        user_query=user_query,
+                        message_history=[],
+                        collection_name=collection_name)
+
+                self.logger.info('Requesting to ask for background')
+                functions = [self.background_function]
+                ask_for_background = ('\n- If you do not have enough background information, '
+                                      'or if the background information does not appear '
+                                      'to be relevant, call the '
+                                      f"{self.background_function['name']} function.")
+                self.logger.info('Calling completion with %s', self.background_function['name'])
+            else:
+                functions = []
+                ask_for_background = ''
+                self.logger.info('Calling completion without background information function')
+
         self.logger.info('Told @%s (%s): %s',
                          self.persona_name,
                          'no background' if not background else ('%d words background' %
                                                                  len(background.split())),
                          user_query[:80].replace('\n', ' '))
-
-        if self.require_background and not background:
-            self.logger.info('Requesting to ask for background')
-            functions = [self.background_function]
-            ask_for_background = ('\n- If you do not have enough background information, '
-                                  'or if the background information does not appear '
-                                  f"to be relevant, call the {self.background_function['name']} "
-                                  'function.')
-            self.logger.info('Calling completion with %s', self.background_function['name'])
-        else:
-            functions = []
-            ask_for_background = ''
-            self.logger.info('Calling completion without background information function')
 
         # The system prompt is not stored with the chat, so it will
         # not come. That enables the same conversation to be shared

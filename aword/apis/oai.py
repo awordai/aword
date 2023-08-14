@@ -98,7 +98,8 @@ def chat_completion_request(messages: List[Dict],
 
     try:
         logger = logging.getLogger(__name__)
-        logger.debug('Calling openai.ChatCompletion with:\n\n%s', pformat(args))
+        logger.info('Calling openai.ChatCompletion with model %s', model_name)
+        logger.debug('openai.ChatCompletion arguments:\n\n%s', pformat(args))
         response = openai.ChatCompletion.create(**args)["choices"][0]["message"]
         function_call = response.get('function_call', None)
         if function_call:
