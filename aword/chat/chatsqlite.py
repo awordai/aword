@@ -69,6 +69,10 @@ class ChatSQLite(Chat):
             role TEXT NOT NULL,
             said TEXT NOT NULL,
             background TEXT,
+            model TEXT,
+            prompt_tokens INTEGER,
+            completion_tokens INTEGER,
+            total_tokens INTEGER,
             created_timestamp TIMESTAMP,
             FOREIGN KEY (chat_id) REFERENCES chat(id)
         )
@@ -88,12 +92,24 @@ class ChatSQLite(Chat):
         cursor = self.connection.cursor()
         for message in messages:
             cursor.execute('''
-            INSERT INTO message (chat_id, role, said, background, created_timestamp)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO message (chat_id,
+                                 role,
+                                 said,
+                                 background,
+                                 model,
+                                 prompt_tokens,
+                                 completion_tokens,
+                                 total_tokens,
+                                 created_timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (chat_id,
                   message['role'],
                   message['said'],
                   message.get('background', ''),
+                  message.get('model', ''),
+                  message.get('prompt_tokens', None),
+                  message.get('completion_tokens', None),
+                  message.get('total_tokens', None),
                   datetime.now(utc).isoformat()))
         self.connection.commit()
 
@@ -102,9 +118,11 @@ class ChatSQLite(Chat):
         """
         cursor = self.connection.cursor()
         cursor.execute('''
-        SELECT role, said, background FROM message WHERE chat_id = ?
+        SELECT role, said, background,total_tokens FROM message WHERE chat_id = ?
         ORDER BY created_timestamp ASC
         ''', (chat_id,))
         rows = cursor.fetchall()
         return [{'role': row['role'],
-                 'content': row['background'] + row['said']} for row in rows]
+                 'said': row['said'],
+                 'background': row['background'],
+                 'total_tokens': row['total_tokens']} for row in rows]

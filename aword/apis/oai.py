@@ -79,7 +79,8 @@ def chat_completion_request(messages: List[Dict],
                             attempts: int = 4) -> Dict:
     args = {'model': model_name,
             'messages': messages,
-            'temperature': temperature}
+            'temperature': temperature,
+            'n': 1}
 
     if functions:
         args['functions'] = functions
@@ -100,13 +101,25 @@ def chat_completion_request(messages: List[Dict],
         logger = logging.getLogger(__name__)
         logger.info('Calling openai.ChatCompletion with model %s', model_name)
         logger.debug('openai.ChatCompletion arguments:\n\n%s', pformat(args))
-        response = openai.ChatCompletion.create(**args)["choices"][0]["message"]
-        function_call = response.get('function_call', None)
+        # Should check finish_reason in case it is 'length', which
+        # would mean too many tokens.
+        # https://platform.openai.com/docs/api-reference/chat/object#chat/object-finish_reason
+
+        response = openai.ChatCompletion.create(**args)
+        meta = {'model': response['model'],
+                'prompt_tokens': response['usage']['prompt_tokens'],
+                'completion_tokens': response['usage']['completion_tokens'],
+                'total_tokens': response['usage']['total_tokens']}
+
+        # The message can have either call_function or a content.
+        message = response["choices"][0]["message"]
+        function_call = message.get('function_call', None)
         if function_call:
             try:
                 return {'call_function': function_call['name'],
                         'with_arguments': json.loads(function_call['arguments']),
-                        'success': True}
+                        'success': True,
+                        **meta}
             except:
                 if attempts:
                     return chat_completion_request(messages=messages,
@@ -115,11 +128,19 @@ def chat_completion_request(messages: List[Dict],
                                                    temperature=temperature/2,
                                                    model_name=model_name,
                                                    attempts=attempts-1)
-                return {'success': False}
-        return {'reply': response['content'],
-                'success': True}
+                return {'success': False,
+                        **meta}
+        return {'reply': message['content'],
+                'success': True,
+                **meta}
     except openai.InvalidRequestError as exc:
         raise E.AwordModelRequestError('Invalid request error from OpenAI') from exc
+    # TODO: if it is a RateLimitError we should check if the rate
+    # limit comes from tokens. If it does, we should not retry (raise
+    # an AwordError) because the recovery time with gpt-4 is 6
+    # min. Actually, we should only try again if it is a
+    # RateeLimitError where the limiting factor is messages per
+    # minute.
 
 
 def get_tokenizer(encoding) -> Any:

@@ -190,22 +190,39 @@ class OAIPersona(Persona):
     def get_param(self, parname: str):
         return self.params[parname]
 
+    def format_message_history(self, messages):
+        background = ''
+        out = []
+        for message in messages:
+            new_background = message.get('background', '')
+            if new_background:
+                background = new_background
+            out.append({'role': message['role'],
+                        'content': message['said']})
+        return out, background
+
     def tell(self,
              user_query: str,
              message_history: List[Dict],
              collection_name: str = None,
              temperature: float = 1,
-             background: str = '') -> Dict:
+             with_background: str = '') -> Dict:
+
+        messages, background = self.format_message_history(message_history)
+
+        if with_background:
+            background = with_background
 
         if self.require_background:
             if not background:
-                if not message_history:
+                if not messages:
                     self.logger.info('Getting background for the first message')
                     background = self.get_background(
                         user_query=user_query,
                         message_history=[],
                         collection_name=collection_name)
 
+            if not with_background:
                 self.logger.info('Requesting to ask for background')
                 functions = [self.background_function]
                 ask_for_background = ('\n- If you do not have enough background information, '
@@ -233,10 +250,10 @@ class OAIPersona(Persona):
 
         user_says = user_query
         if not message_history and self.user_prompt_preface:
-            user_says = self.user_prompt_preface + '\n\n' + user_query
+            user_says = self.user_prompt_preface + '\n' + user_query
 
         messages.append({'role': 'user',
-                         'content': background + user_says})
+                         'content': user_says + background})
 
         out = oai.chat_completion_request(messages=messages,
                                           functions=functions,
@@ -258,15 +275,16 @@ class OAIPersona(Persona):
                              message_history=message_history,
                              collection_name=collection_name,
                              temperature=temperature,
-                             background=self.get_background(
+                             with_background=self.get_background(
                                  user_query=summary_text + user_query,
                                  message_history=message_history,
                                  collection_name=collection_name))
 
-        self.logger.info('Replied @%s: %s, %s',
+        self.logger.info('Replied @%s (%d tokens): %s, %s',
                          self.persona_name,
+                         out['total_tokens'],
                          'success' if out['success'] else 'failure',
-                         out['reply'][:80])
+                         out['reply'][:20])
 
         out['user_says'] = user_says
         out['background'] = background
