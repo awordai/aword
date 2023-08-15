@@ -28,8 +28,8 @@ class Persona(ABC):
     def __init__(self,
                  awd,
                  scopes: List[str],
-                 chunks_for_last_query: int = 10,
-                 chunks_per_conversation: int = 20,
+                 chunks_for_last_query,
+                 chunks_per_conversation,
                  delimiter: str = '```',
                  background_fields: List[Union[str, tuple]] = None,
                  require_background=True):
@@ -59,7 +59,7 @@ class Persona(ABC):
     def format_background(self, payloads: List[Payload]) -> List[str]:
 
         def _format_payload(payload: Payload) -> str:
-            ctx_list = ['```']
+            ctx_list = []# ['```']
 
             def _str(_value, _name):
                 if _name == 'uri':
@@ -86,9 +86,9 @@ class Persona(ABC):
                     value = _str(value, field_name)
 
                 if value:
-                    ctx_list.append(field_label + ': ' + value)
+                    ctx_list.append(field_label + ': ' + value.replace('\n', ' '))
 
-            ctx_list.append('```')
+            # ctx_list.append('```')
             return '\n'.join(ctx_list)
 
         return [_format_payload(c) for c in payloads]
@@ -105,12 +105,15 @@ class Persona(ABC):
         embedder = self.awd.get_embedder()
         store = self.awd.get_store(collection_name=collection_name)
 
+        chunks_for_history = self.chunks_per_conversation - self.chunks_for_last_query
+        self.awd.logger.info('Requesting historical background with %d chunks',
+                             chunks_for_history)
         historical_background = []
         if message_history:
             historical_background = store.search(
-                query_vector=embedder.get_embeddings([msg['content']
-                                                      for msg in message_history])[0],
-                limit=self.chunks_per_conversation - self.chunks_for_last_query,
+                query_vector=embedder.get_embeddings([' '.join([msg['content']
+                                                               for msg in message_history])])[0],
+                limit=chunks_for_history,
                 sources=sources,
                 source_unit_ids=source_unit_ids,
                 categories=categories,
@@ -118,6 +121,8 @@ class Persona(ABC):
                 contexts=contexts,
                 languages=languages)
 
+        self.awd.logger.info('Requesting current query background with %d chunks',
+                             self.chunks_for_last_query)
         user_query_background = store.search(
             query_vector=embedder.get_embeddings([user_query])[0],
             limit=self.chunks_for_last_query,
@@ -131,11 +136,11 @@ class Persona(ABC):
         background = (self.format_background(historical_background) +
                       self.format_background(user_query_background))
         if background:
-            background_str = '\n'.join(background)
-            return f"\n\nBackground information:\n\n{background_str}\n\n"
+            background_str = '---\n'.join(background)
+            return f"\nBackground information:\n{background_str}"
 
         self.awd.logger.warning('No background available')
-        return '\n\nNo more background available.\n\n'
+        return '\nNo more background available.'
 
     @abstractmethod
     def tell(self,
@@ -155,19 +160,23 @@ class OAIPersona(Persona):
                  model_name: str,
                  system_prompt: str,
                  user_prompt_preface: str = '',
-                 chunks_per_conversation: int = 20,
+                 chunks_per_conversation: int = 5,
+                 chunks_for_last_query: int = 4,
+                 temperature: int = 1,
                  delimiter: str = '```',
                  background_fields: List[Union[str, tuple]] = None,
                  **params):
         super().__init__(awd=awd,
                          scopes=scopes,
                          chunks_per_conversation=chunks_per_conversation,
+                         chunks_for_last_query=chunks_for_last_query,
                          delimiter=delimiter,
                          background_fields=background_fields)
         oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
         self.logger = awd.logger
         self.persona_name = persona_name
         self.model_name = model_name
+        self.temperature = temperature
         self.params = params
         self.system_prompt = string.Template(system_prompt).substitute(params)
         self.user_prompt_preface = string.Template(user_prompt_preface).substitute(params)
@@ -205,7 +214,6 @@ class OAIPersona(Persona):
              user_query: str,
              message_history: List[Dict],
              collection_name: str = None,
-             temperature: float = 1,
              with_background: str = '') -> Dict:
 
         messages, background = self.format_message_history(message_history)
@@ -225,10 +233,10 @@ class OAIPersona(Persona):
             if not with_background:
                 self.logger.info('Requesting to ask for background')
                 functions = [self.background_function]
-                ask_for_background = ('\n- If you do not have enough background information, '
-                                      'or if the background information does not appear '
-                                      'to be relevant, call the '
-                                      f"{self.background_function['name']} function.")
+                ask_for_background = ('\n- If the background information is not '
+                                      'enough to answer the question request to call '
+                                      'the function '
+                                      f"{self.background_function['name']}.")
                 self.logger.info('Calling completion with %s', self.background_function['name'])
             else:
                 functions = []
@@ -246,7 +254,7 @@ class OAIPersona(Persona):
         # between several personas
         messages = [{'role': 'system',
                      'content': self.system_prompt + ask_for_background},
-                    *message_history]
+                    *messages]
 
         user_says = user_query
         if not message_history and self.user_prompt_preface:
@@ -258,7 +266,7 @@ class OAIPersona(Persona):
         out = oai.chat_completion_request(messages=messages,
                                           functions=functions,
                                           model_name=self.model_name,
-                                          temperature=temperature)
+                                          temperature=self.temperature)
 
         if out.get('call_function', '') == self.background_function['name']:
             self.logger.info('Model requested background information')
@@ -267,17 +275,16 @@ class OAIPersona(Persona):
                 if not summary_text:
                     self.logger.error('Did not receive with_arguments from the model')
                 else:
-                    summary_text = summary_text + '\n\n'
+                    summary_text = summary_text + '\n'
             else:
                 summary_text = ''
 
             return self.tell(user_query=user_query,
                              message_history=message_history,
                              collection_name=collection_name,
-                             temperature=temperature,
                              with_background=self.get_background(
                                  user_query=summary_text + user_query,
-                                 message_history=message_history,
+                                 message_history=messages,
                                  collection_name=collection_name))
 
         self.logger.info('Replied @%s (%d tokens): %s, %s',

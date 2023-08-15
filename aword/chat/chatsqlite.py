@@ -101,7 +101,7 @@ class ChatSQLite(Chat):
                                  completion_tokens,
                                  total_tokens,
                                  created_timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (chat_id,
                   message['role'],
                   message['said'],

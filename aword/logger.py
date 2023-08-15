@@ -36,14 +36,14 @@ class Formatter(logging.Formatter):
 
 def configure_logging(debug: bool = False,
                       silent: bool = False,
-                      error_logs_dir: str = 'error-logs'):
+                      logs_dir: str = 'logs'):
     global Debug
     Debug = debug
 
     global Silent
     Silent = silent
 
-    error_log_file_path = ''
+    log_file_path = ''
 
     # Check if the application is running as a Lambda function. If so
     # the application does not have access to a file system, and logs
@@ -51,8 +51,8 @@ def configure_logging(debug: bool = False,
     is_lambda = os.getenv('AWS_EXECUTION_ENV', '').startswith('AWS_Lambda_')
     if not is_lambda:
         # Create a logs directory if it doesn't already exist
-        os.makedirs(error_logs_dir, exist_ok=True)
-        error_log_file_path = os.path.join(error_logs_dir, 'error.log')
+        os.makedirs(logs_dir, exist_ok=True)
+        log_file_path = os.path.join(logs_dir, 'aword.log')
 
     LOGGING_CONFIG = {
         'version': 1,
@@ -60,8 +60,8 @@ def configure_logging(debug: bool = False,
             'aword': {
                 'level': 'DEBUG',
                 'propagate': False,
-                'handlers': ['maybe_console_handler'] + (['error_file_handler']
-                                                         if error_log_file_path else []),
+                'handlers': ['maybe_console_handler'] + (['rotating_file_handler']
+                                                         if log_file_path else []),
             }
         },
         'handlers': {
@@ -71,11 +71,11 @@ def configure_logging(debug: bool = False,
                 'class': 'aword.logger.MaybeSilentHandler',
                 'stream': 'ext://sys.stdout',
             },
-            'error_file_handler': {
-                'level': 'ERROR',
+            'rotating_file_handler': {
+                'level': 'DEBUG',
                 'formatter': 'file',
                 'class': 'logging.handlers.RotatingFileHandler',
-                'filename': error_log_file_path,
+                'filename': log_file_path,
                 'mode': 'a',
             }
         },

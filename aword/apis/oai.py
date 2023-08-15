@@ -99,7 +99,9 @@ def chat_completion_request(messages: List[Dict],
 
     try:
         logger = logging.getLogger(__name__)
-        logger.info('Calling openai.ChatCompletion with model %s', model_name)
+        logger.info('Calling openai.ChatCompletion with model %s and temperature %.1f',
+                    model_name,
+                    temperature)
         logger.debug('openai.ChatCompletion arguments:\n\n%s', pformat(args))
         # Should check finish_reason in case it is 'length', which
         # would mean too many tokens.

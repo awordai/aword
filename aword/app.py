@@ -346,7 +346,7 @@ def app():
                                            'If not set the file .env will be loaded if existing.'),
                                   'type': str,
                                   'default': ''},
-        ('-L', '--error-logs-dir'): {'help': 'Directory for the error logs.',
+        ('-L', '--logs-dir'): {'help': 'Directory for the logs.',
                                      'type': str,
                                      'default': 'logs'},
         ('-C', '--config-dir'): {'help': ('Directory with the configuration files. If present '
@@ -378,7 +378,7 @@ def app():
     from aword.logger import configure_logging
     configure_logging(debug=global_args.debug,
                       silent=not global_args.verbose,
-                      error_logs_dir=global_args.error_logs_dir)
+                      logs_dir=global_args.logs_dir)
 
     # These imports happen after the logging has been
     # configured. Otherwise they could get an unconfigured logger.

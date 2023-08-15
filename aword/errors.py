@@ -17,5 +17,5 @@ class AwordPermissionError(AwordError):
     status_code = 403
 
 
-class AwordModelRequestError(Exception):
+class AwordModelRequestError(AwordError):
     status_code = 400
