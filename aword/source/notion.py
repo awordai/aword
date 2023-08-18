@@ -207,7 +207,7 @@ def parse_page(title: str,
                last_edited_by: str,
                last_edited_by_id: str,
                url: str,
-               max_break_level: int,
+               max_cutting_level: int,
                timestamp: str,
                content: List):
 
@@ -236,7 +236,7 @@ def parse_page(title: str,
             level = int(block["type"][-1])
 
             # If the level is low enough we break the segment
-            if level <= max_break_level:
+            if (cutting_level is not None) and (level <= cutting_level):
                 text_so_far = '\n'.join(current_text).strip()
                 if text_so_far:
                     block_last_edited_by_id = block["last_edited_by"]["id"]
@@ -264,6 +264,7 @@ def parse_page(title: str,
                     while (current_heading_chain and level <=
                            current_heading_chain[-1][0]):
                         current_heading_chain.pop()
+
                 # Push the current heading onto the stack
                 current_heading_chain.append((level, _text_from_block(block)))
 
@@ -273,10 +274,26 @@ def parse_page(title: str,
                 text = '- ' + _text_from_block(block)
                 if text:
                     current_text.append('\n' + text.strip() + '\n')
+
+            if level <= max_cutting_level:
+                cutting_level = level
         else:
             text = _text_from_block(block)
             if text:
                 current_text.append(text)
+
+    text_missing = '\n'.join(current_text).strip()
+    if text_missing:
+        segments.append(
+            Segment(body=text_missing,
+                    uri=url + (('#' + current_heading_id)
+                               if current_heading_id else ''),
+                    # Extract heading texts from the stack
+                    headings=[title] + [heading[1] for heading in
+                                        current_heading_chain],
+                    created_by=created_by,
+                    last_edited_by=block_last_edited_by,
+                    last_edited_timestamp=timestamp))
 
     return segments
 
@@ -287,7 +304,7 @@ def process_page(page_id: str,
                  context: str = '',
                  language: str = '',
                  recurse_subpages: bool = False,
-                 max_break_level: int = 2,
+                 max_cutting_level: int = 2,
                  visited_pages: set = None,
                  sleeping: int = 0,
                  **_) -> [Segment]:
@@ -299,6 +316,7 @@ def process_page(page_id: str,
         return []
 
     logger = logging.getLogger(__name__)
+    segments = []
 
     try:
         page = fetch_page(page_id)
@@ -326,7 +344,7 @@ def process_page(page_id: str,
                                   last_edited_by=last_edited_by,
                                   last_edited_by_id=last_edited_by_id,
                                   url=page['url'],
-                                  max_break_level=max_break_level,
+                                  max_cutting_level=max_cutting_level,
                                   timestamp=last_edited_dt,
                                   content=page_content)
 
@@ -342,8 +360,8 @@ def process_page(page_id: str,
                                                 last_edited_by=last_edited_by,
                                                 last_edited_timestamp=last_edited_dt,
                                                 segments=segments)
-        except:
-            logger.error('Failed processing page %s', page_id)
+        except Exception as e:
+            logger.error('Failed processing page %s: %s', page_id, str(e))
 
     if recurse_subpages:
         visited.add(short_page_id)
@@ -355,7 +373,7 @@ def process_page(page_id: str,
                                          scope=scope,
                                          language=language,
                                          recurse_subpages=recurse_subpages,
-                                         max_break_level=max_break_level,
+                                         max_cutting_level=max_cutting_level,
                                          visited_pages=visited,
                                          sleeping=sleeping)
     return segments
@@ -382,7 +400,7 @@ def add_to_cache(awd: Awd,
                                  categories=args.get('categories', []),
                                  scope=args['scope'],
                                  recurse_subpages=args.get('recursive', True),
-                                 max_break_level=args.get('max_break_level', 2),
+                                 max_cutting_level=args.get('max_cutting_level', 2),
                                  sleeping=sleeping)
     return segments
 
