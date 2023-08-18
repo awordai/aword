@@ -20,6 +20,10 @@ Users = {}
 
 API_KEY = ''
 
+def ensure_api_key(awd):
+    global API_KEY
+    API_KEY = awd.getenv('NOTION_API_KEY')
+
 
 def get_headers():
     if not API_KEY:
@@ -203,6 +207,7 @@ def parse_page(title: str,
                last_edited_by: str,
                last_edited_by_id: str,
                url: str,
+               max_break_level: int,
                timestamp: str,
                content: List):
 
@@ -220,11 +225,19 @@ def parse_page(title: str,
     current_heading_chain = []
     current_text = []
     current_heading_id = ''
+    cutting_level = None
     for block in content:
-        if block["object"] == "block":
-            if block["type"].startswith("heading"):
+        if block["object"] != "block":
+            continue
 
-                text_so_far = '\n\n'.join(current_text).strip()
+        if block["type"].startswith("heading"):
+
+            # Extract level from heading type (e.g. "heading_1" => 1)
+            level = int(block["type"][-1])
+
+            # If the level is low enough we break the segment
+            if level <= max_break_level:
+                text_so_far = '\n'.join(current_text).strip()
                 if text_so_far:
                     block_last_edited_by_id = block["last_edited_by"]["id"]
                     block_last_edited_by = (last_edited_by
@@ -245,8 +258,6 @@ def parse_page(title: str,
                     current_text = []
                     current_heading_id = block['id'].replace('-', '')
 
-                # Extract level from heading type (e.g. "heading_1" => 1)
-                level = int(block["type"][-1])
                 if current_heading_chain and level <= current_heading_chain[-1][0]:
                     # Pop headings from the stack until we reach the
                     # correct level
@@ -255,13 +266,19 @@ def parse_page(title: str,
                         current_heading_chain.pop()
                 # Push the current heading onto the stack
                 current_heading_chain.append((level, _text_from_block(block)))
+
+            # A heading like deeper than level does not break segments, have it
+            # at a single line.
             else:
-                text = _text_from_block(block)
+                text = '- ' + _text_from_block(block)
                 if text:
-                    current_text.append(text)
+                    current_text.append('\n' + text.strip() + '\n')
+        else:
+            text = _text_from_block(block)
+            if text:
+                current_text.append(text)
 
     return segments
-
 
 def process_page(page_id: str,
                  source_unit_cache: Cache,
@@ -270,14 +287,16 @@ def process_page(page_id: str,
                  context: str = '',
                  language: str = '',
                  recurse_subpages: bool = False,
+                 max_break_level: int = 2,
                  visited_pages: set = None,
-                 sleeping: int = 0):
+                 sleeping: int = 0,
+                 **_) -> [Segment]:
 
     short_page_id = page_id.replace('-', '')
 
     visited = visited_pages or set([])
     if short_page_id in visited:
-        return
+        return []
 
     logger = logging.getLogger(__name__)
 
@@ -286,9 +305,9 @@ def process_page(page_id: str,
         if sleeping:
             time.sleep(sleeping)
         page_content = fetch_block_children(page_id, sleeping=sleeping)
-    except:
-        logger.error('Failed tying to fetch %s', page_id)
-        return
+    except Exception as e:
+        logger.error('Failed tying to fetch %s:/n%s', page_id, str(e))
+        return []
 
     last_edited_dt = T.timestamp_as_utc(page.get(
         'last_edited_time', page['created_time']))
@@ -307,6 +326,7 @@ def process_page(page_id: str,
                                   last_edited_by=last_edited_by,
                                   last_edited_by_id=last_edited_by_id,
                                   url=page['url'],
+                                  max_break_level=max_break_level,
                                   timestamp=last_edited_dt,
                                   content=page_content)
 
@@ -329,47 +349,42 @@ def process_page(page_id: str,
         visited.add(short_page_id)
         for block in page_content:
             if block['type'] == 'child_page':
-                process_page(page_id=block['id'],
-                             source_unit_cache=source_unit_cache,
-                             categories=categories,
-                             scope=scope,
-                             language=language,
-                             recurse_subpages=True,
-                             visited_pages=visited,
-                             sleeping=sleeping)
+                segments += process_page(page_id=block['id'],
+                                         source_unit_cache=source_unit_cache,
+                                         categories=categories,
+                                         scope=scope,
+                                         language=language,
+                                         recurse_subpages=recurse_subpages,
+                                         max_break_level=max_break_level,
+                                         visited_pages=visited,
+                                         sleeping=sleeping)
+    return segments
 
 
 def add_to_cache(awd: Awd,
                  sleeping: int = 0.5):
-    global API_KEY
-    API_KEY = awd.getenv('NOTION_API_KEY')
-
+    ensure_api_key(awd)
     sources = awd.get_single_source_config(SourceName, {})
 
-    page_id_categories_scopes = []
+    pages_args = sources.get('pages', [])
+
     for database in sources.get('databases', []):
-        page_id_categories_scopes.extend(
-            [(page_id,
-              database.get('category', ''),
-              database.get('scope', '')) for page_id in
-             fetch_all_pages_in_database(database['id'])]
-        )
+        pages_args.extend([{'page_id': page_id, **database}
+                           for page_id in
+                           fetch_all_pages_in_database(database['database_id'])])
 
-
-    for page in sources.get('pages', []):
-        page_id_categories_scopes.append((page['id'],
-                                          page.get('categories', []),
-                                          page.get('scope', '')))
-        time.sleep(sleeping)
 
     source_unit_cache = awd.get_source_unit_cache()
-    for (page_id, categories, scope) in page_id_categories_scopes:
-        process_page(page_id=page_id,
-                     source_unit_cache=source_unit_cache,
-                     categories=categories,
-                     scope=scope,
-                     recurse_subpages=True,
-                     sleeping=sleeping)
+    segments = []
+    for args in pages_args:
+        segments += process_page(page_id=args['page_id'],
+                                 source_unit_cache=source_unit_cache,
+                                 categories=args.get('categories', []),
+                                 scope=args['scope'],
+                                 recurse_subpages=args.get('recursive', True),
+                                 max_break_level=args.get('max_break_level', 2),
+                                 sleeping=sleeping)
+    return segments
 
 
 def add_args(parser):

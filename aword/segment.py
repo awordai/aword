@@ -3,6 +3,7 @@
 import datetime
 import copy
 import json
+import re
 from typing import Dict, Any, List, Union
 
 import aword.tools as T
@@ -21,8 +22,8 @@ class Segment(dict):
 
         super().__init__()
 
-        self['body'] = body
         # Setters will validate and load json
+        self.body = body
         self.uri = uri
         self.headings = headings
         self['language'] = language.lower()
@@ -54,6 +55,8 @@ class Segment(dict):
         elif name in ('headings', 'metadata'):
             if isinstance(value, str):
                 value = json.loads(value)
+        elif name == 'body':
+            value = re.sub(r'\n+', '\n', value)
         self[name] = value
 
     def copy(self):

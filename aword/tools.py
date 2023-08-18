@@ -2,10 +2,11 @@
 
 import os
 import datetime
-from typing import Dict, List, Union
-
 import urllib
 import urllib.request
+from typing import Dict, List, Union
+
+from dateutil.parser import parse as dateutil_parse
 
 
 def timestamp_as_utc(timestamp: Union[datetime.datetime, str] = None) -> datetime.datetime:
@@ -15,7 +16,7 @@ def timestamp_as_utc(timestamp: Union[datetime.datetime, str] = None) -> datetim
                              "format or a datetime object.")
 
         if isinstance(timestamp, str):
-            timestamp = datetime.datetime.fromisoformat(timestamp)
+            timestamp = dateutil_parse(timestamp)
 
         if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
             timestamp = timestamp.replace(

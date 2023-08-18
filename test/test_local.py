@@ -15,6 +15,9 @@ def update_modification_time(directory):
 
 
 def test_local(awd):
+    suc = awd.get_source_unit_cache()
+    suc.reset_tables()
+
     segments = add_to_cache(awd)
     assert len(segments) == 39
 

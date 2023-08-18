@@ -2,9 +2,10 @@
   "notion": {
     "pages": [
       {
-        "id": "7c1003c6426146a2ae485e8e3bfe600b",
+        "page_id": "7c1003c6426146a2ae485e8e3bfe600b",
         "doc": "Notion test pages",
-        "categories": ["historical"]
+        "categories": ["historical"],
+        "scope": "support"
       }
     ]
   },
