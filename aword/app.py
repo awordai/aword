@@ -304,7 +304,7 @@ class Awd:
             chunks = vector_store.store_source_unit(embedder,
                                                     source=source_unit['source'],
                                                     source_unit_id=source_unit['source_unit_id'],
-                                                    uri=source_unit['uri'],
+                                                    source_unit_uri=source_unit['uri'],
                                                     categories=source_unit['categories'],
                                                     scope=source_unit['scope'],
                                                     context=source_unit['context'],
@@ -335,6 +335,9 @@ def add_args(parser):
     parser.add_argument('--update-source-cache',
                         help=('Updates the cache from a list of comma-separated sources.'),
                         type=str)
+    parser.add_argument('--refresh',
+                        help=('Updates the cache from all sources and embeds it.'),
+                        type=str)
 
 
 def main(awd, args):
@@ -346,6 +349,10 @@ def main(awd, args):
 
     if args['update_source_cache']:
         awd.update_cache(args['update_source_cache'].split(','))
+
+    if args['refresh']:
+        awd.update_cache()
+        awd.embed_and_store()
 
 
 def app():

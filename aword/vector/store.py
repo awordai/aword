@@ -63,7 +63,7 @@ class Store(ABC):
         """
 
     @abstractmethod
-    def delete_namespace(self, vector_namespace: str):
+    def delete_namespace(self):
         """Delete a vector namespace (collection in qdrant)
         """
 
@@ -71,7 +71,7 @@ class Store(ABC):
                           embedder: Embedder,
                           source: str,
                           source_unit_id: str,
-                          uri: str,
+                          source_unit_uri: str,
                           categories: str,
                           scope: str,  # confidential, public
                           context: str,  # historical, reference, internal_comm...
@@ -93,7 +93,7 @@ class Store(ABC):
             for chunk in chunks:
                 chunk.payload.source = source
                 chunk.payload.source_unit_id = source_unit_id
-                chunk.payload.uri = uri
+                chunk.payload.uri = segment.uri or source_unit_uri
                 chunk.payload.categories = categories
                 chunk.payload.scope = scope
                 chunk.payload.context = context
@@ -177,6 +177,7 @@ class QdrantStore(Store):
         self.logger.info('Created collection %s', self.collection_name)
 
     def delete_namespace(self):
+        self.logger.warn('Deleting namespace %s', self.collection_name)
         self.client.delete_collection(self.collection_name)
 
     def create_filter(self,
@@ -343,6 +344,7 @@ def add_args(parser):
     parser.add_argument('--source',
                         help='Limit listings and actions to this source.',
                         type=str)
+
     parser.add_argument('--source-unit-id',
                         help=('Limit listings and actions to this source unit id. '
                               'It only makes sense if source is also defined with --source.'),
@@ -352,6 +354,9 @@ def add_args(parser):
                         help=('Count the embeddings.'),
                         action='store_true')
 
+    parser.add_argument('--delete-namespace',
+                        help='Delete namespace. Set to "really".',
+                        type=str)
 
 def main(awd, args):
     if args['source_unit_id'] and not args['source']:
@@ -365,6 +370,9 @@ def main(awd, args):
     if args['source_unit_id']:
         filter_args['source_unit_ids'] = [args['source_unit_id']]
 
-    store = awd.get_store()
+    store = awd.get_vector_store()
     if args['count_embeddings']:
         print(store.count(**filter_args))
+
+    if args['delete_namespace'] == 'really':
+        store.delete_namespace()

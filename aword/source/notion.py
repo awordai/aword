@@ -227,6 +227,7 @@ def parse_page(title: str,
     current_text = []
     current_heading_id = ''
     cutting_level = None
+    block_last_edited_by = last_edited_by
     for block in content:
         if block["object"] != "block":
             continue

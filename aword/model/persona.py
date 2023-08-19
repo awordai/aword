@@ -180,18 +180,18 @@ class OAIPersona(Persona):
         self.system_prompt = string.Template(system_prompt).substitute(params)
         self.user_prompt_preface = string.Template(user_prompt_preface).substitute(params)
         self.background_function = {
-            "name": "get_background_information",
-            "description": "Get relevant background information to generate a correct answer.",
+            "name": "update_background_information",
+            "description": ("If the background information is not good enough to give an answer "
+                            "call this function to refresh it."),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "summary_text": {
+                    "user_query": {
                         "type": "string",
-                        "description": ("A description of what the required "
-                                        "background information is for.")
+                        "description": ("The query you are trying to answer")
                     }
                 },
-                "required": ["summary_text"]
+                "required": ["user_query"]
             }
         }
 
@@ -230,10 +230,11 @@ class OAIPersona(Persona):
             if not with_background:
                 self.logger.info('Requesting to ask for background')
                 functions = [self.background_function]
-                ask_for_background = ('\n- If the background information is not '
-                                      'enough to answer the question request to call '
+                ask_for_background = ('\n- Never say that the background is not enough. '
+                                      'If the background information is not '
+                                      'present or not relevant to the question call '
                                       'the function '
-                                      f"{self.background_function['name']}.")
+                                      f"{self.background_function['name']}")
                 self.logger.info('Calling completion with %s', self.background_function['name'])
             else:
                 functions = []
@@ -266,20 +267,21 @@ class OAIPersona(Persona):
                                           temperature=self.temperature)
 
         if out.get('call_function', '') == self.background_function['name']:
-            self.logger.info('Model requested background information')
-            if message_history:
-                summary_text = out.get('with_arguments', {})['summary_text']
-                if not summary_text:
-                    self.logger.error('Did not receive with_arguments from the model')
-                else:
-                    summary_text = summary_text + '\n'
-            else:
-                summary_text = ''
+            self.logger.info('Model requested background information for %s',
+                             out.get('with_arguments', {})['user_query'])
+            # if message_history:
+            #     summary_text = out.get('with_arguments', {})['summary_text']
+            #     if not summary_text:
+            #         self.logger.error('Did not receive with_arguments from the model')
+            #     else:
+            #         summary_text = summary_text + '\n'
+            # else:
+            #     summary_text = ''
 
             return self.tell(user_query=user_query,
                              message_history=message_history,
                              with_background=self.get_background(
-                                 user_query=summary_text + user_query,
+                                 user_query=user_query,
                                  message_history=messages))
 
         self.logger.info('Replied @%s (%d tokens): %s, %s',
