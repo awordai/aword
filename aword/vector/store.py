@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+"""Query the vector store.
+"""
 
 import uuid
 from typing import List, Dict, Union
@@ -14,16 +16,16 @@ from aword.chunk import Chunk, Payload
 from aword.segment import Segment
 
 
-def make_store(awd,
-               collection_name: str,
-               config: Dict):
-    """In a multi-tenant environment the collection_name is the
+def make_vector_store(awd,
+                      vector_namespace: str,
+                      config: Dict):
+    """In a multi-tenant environment the vector_namespace is the
     tenant_id.
     """
     provider = config.get('provider', 'qdrant')
     if provider == 'qdrant':
-        # collection_name can come in the config, overriding it if so.
-        return QdrantStore(awd, **{**config, **{'collection_name': collection_name}})
+        # vector_namespace can come in the config, overriding it if so.
+        return QdrantStore(awd, **{**config, **{'vector_namespace': vector_namespace}})
 
     raise ValueError(f'Unknown vector store provider {provider}')
 
@@ -53,6 +55,16 @@ class Store(ABC):
         database. Extended chunks are dictionaries based in Chunks,
         with an id, a source_unit_id, a source, categories, a
         scope and a context.
+        """
+
+    @abstractmethod
+    def create_namespace(self, dimensions: int):
+        """Create a vector namespace (collection in qdrant)
+        """
+
+    @abstractmethod
+    def delete_namespace(self, vector_namespace: str):
+        """Delete a vector namespace (collection in qdrant)
         """
 
     def store_source_unit(self,
@@ -102,13 +114,13 @@ class QdrantStore(Store):
 
     def __init__(self,
                  awd,
-                 collection_name,
+                 vector_namespace,
                  local_db: str = None,
                  url: str = None,
                  distance: str = 'cosine',
                  **_):
         super().__init__(awd)
-        self.collection_name = collection_name
+        self.collection_name = vector_namespace
         self.distance = distance
 
         if url:
@@ -124,12 +136,12 @@ class QdrantStore(Store):
 
         self.client = QdrantClient(**client_pars)
         try:
-            self.client.get_collection(collection_name=collection_name)
+            self.client.get_collection(collection_name=self.collection_name)
         except:
-            self.logger.warn('Collection %s does not exist, creating it', collection_name)
-            self.create_collection(dimensions=awd.get_embedder().dimensions)
+            self.logger.warn('Collection %s does not exist, creating it', self.collection_name)
+            self.create_namespace(dimensions=awd.get_embedder().dimensions)
 
-    def create_collection(self, dimensions: int):
+    def create_namespace(self, dimensions: int):
         distance = {'dot': models.Distance.DOT,
                     'cosine': models.Distance.COSINE,
                     'euclid': models.Distance.EUCLID}[self.distance]
@@ -163,6 +175,9 @@ class QdrantStore(Store):
                                          field_schema="keyword")
 
         self.logger.info('Created collection %s', self.collection_name)
+
+    def delete_namespace(self):
+        self.client.delete_collection(self.collection_name)
 
     def create_filter(self,
                       sources: Union[List[str], str] = None,

@@ -96,14 +96,13 @@ class Persona(ABC):
     def get_background(self,
                        user_query: str,
                        message_history: List[Dict],
-                       collection_name: str = None,
                        sources: Union[List[str], str] = None,
                        source_unit_ids: Union[List[str], str] = None,
                        categories: Union[List[str], str] = None,
                        contexts: Union[List[str], str] = None,
                        languages: Union[List[str], str] = None) -> str:
         embedder = self.awd.get_embedder()
-        store = self.awd.get_store(collection_name=collection_name)
+        store = self.awd.get_vector_store()
 
         chunks_for_history = self.chunks_per_conversation - self.chunks_for_last_query
         self.awd.logger.info('Requesting historical background with %d chunks',
@@ -213,7 +212,6 @@ class OAIPersona(Persona):
     def tell(self,
              user_query: str,
              message_history: List[Dict],
-             collection_name: str = None,
              with_background: str = '') -> Dict:
 
         messages, background = self.format_message_history(message_history)
@@ -227,8 +225,7 @@ class OAIPersona(Persona):
                     self.logger.info('Getting background for the first message')
                     background = self.get_background(
                         user_query=user_query,
-                        message_history=[],
-                        collection_name=collection_name)
+                        message_history=[])
 
             if not with_background:
                 self.logger.info('Requesting to ask for background')
@@ -281,11 +278,9 @@ class OAIPersona(Persona):
 
             return self.tell(user_query=user_query,
                              message_history=message_history,
-                             collection_name=collection_name,
                              with_background=self.get_background(
                                  user_query=summary_text + user_query,
-                                 message_history=messages,
-                                 collection_name=collection_name))
+                                 message_history=messages))
 
         self.logger.info('Replied @%s (%d tokens): %s, %s',
                          self.persona_name,

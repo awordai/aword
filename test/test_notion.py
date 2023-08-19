@@ -2,7 +2,7 @@
 
 import time
 
-from aword.source.notion import ensure_api_key, process_page, add_to_cache
+from aword.source.notion import ensure_api_key, process_page, update_cache
 
 
 def test_process_page(awd):
@@ -39,10 +39,10 @@ def test_add_to_cache(awd):
     suc = awd.get_source_unit_cache()
     suc.reset_tables()
 
-    segments = add_to_cache(awd)
+    segments = update_cache(awd)
     assert len(segments) == 23
 
     time.sleep(0.5)
 
-    segments = add_to_cache(awd)
+    segments = update_cache(awd)
     assert len(segments) == 0

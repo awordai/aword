@@ -202,6 +202,7 @@ def fetch_page_authors(page: Dict, sleeping: int = 0) -> Tuple:
     return created_by, last_edited_by, last_edited_by_id
 
 
+# pylint: disable=too-many-branches
 def parse_page(title: str,
                created_by: str,
                last_edited_by: str,
@@ -234,6 +235,7 @@ def parse_page(title: str,
 
             # Extract level from heading type (e.g. "heading_1" => 1)
             level = int(block["type"][-1])
+            current_heading_id = block['id'].replace('-', '')
 
             # If the level is low enough we break the segment
             if (cutting_level is not None) and (level <= cutting_level):
@@ -256,7 +258,6 @@ def parse_page(title: str,
                                 last_edited_by=block_last_edited_by,
                                 last_edited_timestamp=timestamp))
                     current_text = []
-                    current_heading_id = block['id'].replace('-', '')
 
                 if current_heading_chain and level <= current_heading_chain[-1][0]:
                     # Pop headings from the stack until we reach the
@@ -268,8 +269,8 @@ def parse_page(title: str,
                 # Push the current heading onto the stack
                 current_heading_chain.append((level, _text_from_block(block)))
 
-            # A heading like deeper than level does not break segments, have it
-            # at a single line.
+            # A heading deeper than level does not break segments,
+            # have it at a single line.
             else:
                 text = '- ' + _text_from_block(block)
                 if text:
@@ -379,7 +380,7 @@ def process_page(page_id: str,
     return segments
 
 
-def add_to_cache(awd: Awd,
+def update_cache(awd: Awd,
                  sleeping: int = 0.5):
     ensure_api_key(awd)
     sources = awd.get_single_source_config(SourceName, {})
@@ -403,14 +404,3 @@ def add_to_cache(awd: Awd,
                                  max_cutting_level=args.get('max_cutting_level', 2),
                                  sleeping=sleeping)
     return segments
-
-
-def add_args(parser):
-    parser.add_argument('--add-to-cache',
-                        action='store_true',
-                        help='Add notion documents to the cache')
-
-
-def main(awd, args):
-    if args['add_to_cache']:
-        add_to_cache(awd)

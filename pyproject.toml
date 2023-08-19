@@ -54,7 +54,7 @@ aword = "aword.app:app"
 ask = "aword.model.respondent:main"
 
 [tool.pytest.ini_options]
-addopts = "--ignore=build --ignore=doc --ignore=flymake"
+addopts = "--ignore=build --ignore=doc --ignore=flymake --log-cli-level=INFO --capture=no"
 pythonpath = [
   "."
 ]

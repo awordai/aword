@@ -19,9 +19,9 @@ import aword.errors as E
 class Awd:
 
     def __init__(self,
+                 vector_namespace: str = None,
                  environment_name: str = '',
-                 config_dir: str = None,
-                 collection_name: str = None):
+                 config_dir: str = None):
         self.config_dir = config_dir
         self.environment_name = environment_name
 
@@ -52,14 +52,14 @@ class Awd:
             if env_name.startswith('AWORD_'):
                 self.environment[env_name[6:]] = env_val
 
+        self.vector_namespace = vector_namespace
         self.config = {}
         self.json_configs = {}
-        self.collection_name = collection_name
 
         self._embedder = {}
         self._personas = {}
         self._respondents = {}
-        self._store = {}
+        self._vector_store = {}
         self._source_unit_cache = None
         self._chunk_cache = None
         self._chat = None
@@ -118,13 +118,11 @@ class Awd:
     def get_single_source_config(self, source_name: str,
                                  default: Union[Dict, List] = None) -> Union[Dict, List]:
         return self.get_sources_config().get(source_name, default
-                                                   if default is not None else {})
+                                             if default is not None else {})
 
-    def get_model_config(self, model_name: str = None) -> Dict:
+    def get_model_config(self) -> Dict:
         embedding_config = self.get_config('embedding')
-
-        return self.get_json_config('models').get(model_name or embedding_config['model_name'],
-                                                  {})
+        return self.get_json_config('models').get(embedding_config['model_name'], {})
 
     def get_config(self, section: str) -> Dict:
         if not self.config:
@@ -151,17 +149,14 @@ class Awd:
 
         return self.config.get(section, {})
 
-    def get_embedder(self, model_name: str = None):
+    def get_embedder(self):
         embedding_config = self.get_config('embedding').copy()
-        if model_name is None:
-            model_name = embedding_config['model_name']
-        else:
-            embedding_config['model_name'] = model_name
+        model_name = embedding_config['model_name']
 
         if model_name not in self._embedder:
             from aword.model.embedder import make_embedder
 
-            model_config = self.get_json_config('models').get(embedding_config['model_name'], {})
+            model_config = self.get_json_config('models').get(model_name, {})
             self._embedder[model_name] = make_embedder(self, {**model_config, **embedding_config})
 
         return self._embedder[model_name]
@@ -220,33 +215,41 @@ class Awd:
 
         return self._personas[persona_name]
 
-    def get_store(self, collection_name: str = None):
+    def get_vector_namespace(self):
+        if self.vector_namespace:
+            return self.vector_namespace
         vector_config = self.get_config('vector')
-        if collection_name is None:
-            collection_name = vector_config.get('collection_name', None)
+        return vector_config.get('default_namespace', None)
 
-        if collection_name is None:
-            # If there's only one store, return it
-            if len(self._store) == 1:
-                return next(iter(self._store.values()))
-            if not self._store:
-                raise ValueError('There are no stores available, please specify a collection name')
-            raise ValueError("There are multiple stores available, "
-                             "please specify a collection name.")
+    def get_vector_store(self):
+        vector_config = self.get_config('vector')
+        vector_namespace = self.vector_namespace or vector_config.get('default_namespace', None)
 
-        if collection_name not in self._store:
-            from aword.vector.store import make_store
+        if vector_namespace is None:
+            # If there's only one vector_store, return it
+            if len(self._vector_store) == 1:
+                return next(iter(self._vector_store.values()))
+            if not self._vector_store:
+                raise ValueError('There are no vector stores available, '
+                                 'please specify a vector_namespace')
+            raise ValueError("There are multiple vector stores available, "
+                             "please specify a vector_namespace.")
+
+        if vector_namespace not in self._vector_store:
+            from aword.vector.store import make_vector_store
 
             embedding_config = self.get_config('embedding')
-            self._store[collection_name] = make_store(self,
-                                                      collection_name,
-                                                      {**vector_config, **embedding_config})
+            self._vector_store[vector_namespace] = make_vector_store(self,
+                                                                     vector_namespace,
+                                                                     {**vector_config,
+                                                                      **embedding_config})
 
-        return self._store[collection_name]
+        self.logger.info('Returning vector store for namespace %s', vector_namespace)
+        return self._vector_store[vector_namespace]
 
-    def create_store_collection(self, collection_name: str = None):
-        store = self.get_store(collection_name)
-        store.create_collection(dimensions=self.get_embedder().dimensions)
+    def create_vector_namespace(self):
+        vector_store = self.get_vector_store()
+        vector_store.create_namespace(dimensions=self.get_embedder().dimensions)
 
     def get_source_unit_cache(self):
         if self._source_unit_cache is None:
@@ -270,18 +273,27 @@ class Awd:
 
         return self._chunk_cache
 
+    def get_chat(self):
+        if self._chat is None:
+            chat_config = self.get_config('chat')
+            provider = chat_config.get('provider', 'chatsqlite')
+            processor = import_module(f'aword.chat.{provider}')
+            self._chat = processor.make_chat(self, **chat_config)
+
+        return self._chat
+
     def update_cache(self,
                      sources: List[str] = None):
-        for source_name in sources or ['local', 'notion']:
+        for source_name in sources or self.get_sources_config().keys():
             processor = import_module(f'aword.source.{source_name}')
-            processor.add_to_cache(self)
+            processor.update_cache(self)
 
-    def embed_and_store(self, collection_name: str = None, model_name: str = None):
+    def embed_and_store(self):
         source_unit_cache = self.get_source_unit_cache()
         chunk_cache = self.get_chunk_cache()
 
-        store = self.get_store(collection_name)
-        embedder = self.get_embedder(model_name)
+        vector_store = self.get_vector_store()
+        embedder = self.get_embedder()
 
         total_chunks = 0
         for source_unit in source_unit_cache.list_unembedded_rows():
@@ -289,15 +301,15 @@ class Awd:
             self.logger.info('Embedding and storing source unit (%s, %s)',
                              str(source_unit['source']),
                              str(source_unit['source_unit_id']))
-            chunks = store.store_source_unit(embedder,
-                                             source=source_unit['source'],
-                                             source_unit_id=source_unit['source_unit_id'],
-                                             uri=source_unit['uri'],
-                                             categories=source_unit['categories'],
-                                             scope=source_unit['scope'],
-                                             context=source_unit['context'],
-                                             language=source_unit['language'],
-                                             segments=source_unit['segments'])
+            chunks = vector_store.store_source_unit(embedder,
+                                                    source=source_unit['source'],
+                                                    source_unit_id=source_unit['source_unit_id'],
+                                                    uri=source_unit['uri'],
+                                                    categories=source_unit['categories'],
+                                                    scope=source_unit['scope'],
+                                                    context=source_unit['context'],
+                                                    language=source_unit['language'],
+                                                    segments=source_unit['segments'])
             source_unit_cache.flag_as_embedded([source_unit], now=now)
 
             # First remove the chunks for this source unit. Otherwise
@@ -311,26 +323,29 @@ class Awd:
 
         self.logger.info('Added %d chunks', total_chunks)
 
-    def get_chat(self):
-        if self._chat is None:
-            chat_config = self.get_config('chat')
-            provider = chat_config.get('provider', 'chatsqlite')
-            processor = import_module(f'aword.chat.{provider}')
-            self._chat = processor.make_chat(self, **chat_config)
-
-        return self._chat
-
 
 def add_args(parser):
     parser.add_argument('--embed-cache',
-                        help=('Chunks and embeds the unembedded segments in the cache, and '
+                        help=('Chunks and embeds the unembedded segments in the cache and '
                               'stores them in the vector database'),
                         action='store_true')
+    parser.add_argument('--update-cache',
+                        help=('Updates the cache from all sources.'),
+                        action='store_true')
+    parser.add_argument('--update-source-cache',
+                        help=('Updates the cache from a list of comma-separated sources.'),
+                        type=str)
 
 
 def main(awd, args):
     if args['embed_cache']:
         awd.embed_and_store()
+
+    if args['update_cache']:
+        awd.update_cache()
+
+    if args['update_source_cache']:
+        awd.update_cache(args['update_source_cache'].split(','))
 
 
 def app():
@@ -347,14 +362,16 @@ def app():
                                   'type': str,
                                   'default': ''},
         ('-L', '--logs-dir'): {'help': 'Directory for the logs.',
-                                     'type': str,
-                                     'default': 'logs'},
+                               'type': str,
+                               'default': 'logs'},
         ('-C', '--config-dir'): {'help': ('Directory with the configuration files. If present '
                                           'it will not attempt to search for them in the '
                                           'default places (the value of the AWORD_CONFIG_DIR '
-                                          'environment variable and the ~/.aword folder)'),
-                                 'type': str}
-    }
+                                          'environment variable and the ~/.aword folder).'),
+                                 'type': str},
+        ('-V', '--vector-namespace',): {'help': ('Overrides the default_namespace in '
+                                                 'the vector store configuration.'),
+                                        'type': str}}
 
     parser_config = argparse.ArgumentParser(add_help=False)
 
@@ -374,7 +391,6 @@ def app():
     for argument, options in core_arguments.items():
         parser.add_argument(*argument, **options)
 
-
     from aword.logger import configure_logging
     configure_logging(debug=global_args.debug,
                       silent=not global_args.verbose,
@@ -382,19 +398,15 @@ def app():
 
     # These imports happen after the logging has been
     # configured. Otherwise they could get an unconfigured logger.
-    import aword.source.notion
-    import aword.source.local
     import aword.chat.chat
     import aword.model.respondent
     import aword.cache.cache
     import aword.vector.store
     commands = {
-        'notion': aword.source.notion,
-        'local': aword.source.local,
         'chat': aword.chat.chat,
         'ask': aword.model.respondent,
         'cache': aword.cache.cache,
-        'store': aword.vector.store
+        'vector': aword.vector.store
     }
 
     subparsers = parser.add_subparsers(title='Commands')
@@ -430,7 +442,8 @@ def app():
     dict_args['mode'] = command
 
     awd = Awd(environment_name=global_args.environment,
-              config_dir=global_args.config_dir)
+              config_dir=global_args.config_dir,
+              vector_namespace=global_args.vector_namespace)
     command_function(awd, dict_args)
 
 

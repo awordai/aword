@@ -8,14 +8,14 @@ def test_update_cache(awd):
     awd.update_cache()
 
     unembedded = suc.list_unembedded_rows()
-    assert len(unembedded) == 14
+    assert len(unembedded) == 15
 
-    assert sum(len(source_unit['segments']) for source_unit in unembedded) == 74
+    assert sum(len(source_unit['segments']) for source_unit in unembedded) == 62
 
 
 # pylint: disable=unused-argument
-def test_embed_and_store(awd, collection_name, ensure_empty_collection):
-    awd.embed_and_store(collection_name=collection_name)
+def test_embed_and_store(awd, ensure_empty_vector_namespace):
+    awd.embed_and_store()
 
     suc = awd.get_source_unit_cache()
     unembedded = suc.list_unembedded_rows()
