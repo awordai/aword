@@ -4,7 +4,7 @@
 
 import uuid
 from typing import List, Dict, Union
-from pprint import pformat
+from pprint import pformat, pprint
 from abc import ABC, abstractmethod
 
 from qdrant_client import models
@@ -341,6 +341,7 @@ class QdrantStore(Store):
 
 
 def add_args(parser):
+    import argparse
     parser.add_argument('--source',
                         help='Limit listings and actions to this source.',
                         type=str)
@@ -350,18 +351,36 @@ def add_args(parser):
                               'It only makes sense if source is also defined with --source.'),
                         type=str)
 
-    parser.add_argument('--count-embeddings',
-                        help=('Count the embeddings.'),
+    parser.add_argument('--count',
+                        help='Count the items in the namespace.',
+                        action='store_true')
+
+    parser.add_argument('--list',
+                        help='List the namespace',
                         action='store_true')
 
     parser.add_argument('--delete-namespace',
-                        help='Delete namespace. Set to "really".',
+                        help='Delete the namespace. Set to "really".',
                         type=str)
 
+    parser.add_argument('--search-limit',
+                        help='Number of results to return for a search.',
+                        type=int,
+                        default=3)
+
+    parser.add_argument('--search',
+                        help='Embed the question and return the payloads.',
+                        action='store_true')
+
+    parser.add_argument('search_terms',
+                        nargs=argparse.REMAINDER,
+                        help='Terms to search for.')
+
+
 def main(awd, args):
+    import sys
     if args['source_unit_id'] and not args['source']:
         awd.logger.error('Got source-unit-id but no source, please specify one.')
-        import sys
         sys.exit(1)
 
     filter_args = {}
@@ -371,8 +390,23 @@ def main(awd, args):
         filter_args['source_unit_ids'] = [args['source_unit_id']]
 
     store = awd.get_vector_store()
-    if args['count_embeddings']:
+    if args['count']:
         print(store.count(**filter_args))
+
+    if args['list']:
+        for point in store.fetch_all(**filter_args):
+            pprint(dict(point))
 
     if args['delete_namespace'] == 'really':
         store.delete_namespace()
+
+    if args['search']:
+        if not args['search_terms']:
+            awd.logger.error('Please tell me what to search for')
+            sys.exit(1)
+        embedder = awd.get_embedder()
+        query_vector = embedder.get_embeddings([' '.join(args['search_terms'])])[0]
+        for point in store.search(
+                query_vector=query_vector,
+                limit=args['search_limit']):
+            pprint(dict(point))

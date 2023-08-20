@@ -172,4 +172,4 @@ res/dev/local.qdrant
 /tmp
 **/cache.db
 res/qtc/*
-
+logs/*

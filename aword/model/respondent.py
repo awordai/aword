@@ -3,6 +3,7 @@
 """
 import string
 import time
+from pprint import pformat, pprint
 from typing import Dict
 
 from aword.apis import oai
@@ -72,16 +73,13 @@ class OAIRespondent:
                 return self.ask(text, temperature, attempts-1)
 
             out = {'success': False,
-                   'reply': 'Failed at generating reply',
-                   'arguments': {}}
+                   'reply': {'error': f'Failed at generating reply: {str(e)}'}}
 
-        self.logger.info('Replied @%s: %s, %s',
+        self.logger.info('Replied @%s (%s):\n%s',
                          self.respondent_name,
                          'success' if out['success'] else 'failure',
-                         out['with_arguments']['summary'][:80])
-        return {'success': True,
-                'reply': out['with_arguments']['summary'],
-                'language': out['with_arguments']['language']}
+                         pformat(out['with_arguments']))
+        return out
 
 
 def add_args(parser):
@@ -94,4 +92,4 @@ def main(awd, args):
     respondent_name = args['respondent'].replace('@', '')
     question = ' '.join(args['question'])
     respondent = awd.get_respondent(respondent_name)
-    print(respondent.ask(question))
+    pprint(respondent.ask(question))
