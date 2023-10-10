@@ -47,6 +47,8 @@ class ChatSQLite(Chat):
 
     def __init__(self, awd, db_file=None):
         super().__init__(awd)
+        self.vector_namespace = awd.get_vector_namespace()
+        awd.logger.info('Initializing sqlite chat for vector namespace %s', self.vector_namespace)
         self.db_file = db_file
         self.connection = get_connection(self.db_file)
         self._init_tables()
@@ -56,7 +58,7 @@ class ChatSQLite(Chat):
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS chat (
             id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
+            vector_namespace TEXT NOT NULL,
             user_id TEXT NOT NULL,
             created_timestamp TIMESTAMP
         )
@@ -79,12 +81,12 @@ class ChatSQLite(Chat):
         ''')
         self.connection.commit()
 
-    def new_chat(self, tenant_id: str, user_id: str) -> str:
+    def new_chat(self, user_id: str) -> str:
         chat_id = str(uuid.uuid4())
         cursor = self.connection.cursor()
         cursor.execute('''
-        INSERT INTO chat (id, tenant_id, user_id, created_timestamp) VALUES (?, ?, ?, ?)
-        ''', (chat_id, tenant_id, user_id, datetime.now(utc).isoformat()))
+        INSERT INTO chat (id, vector_namespace, user_id, created_timestamp) VALUES (?, ?, ?, ?)
+        ''', (chat_id, self.vector_namespace, user_id, datetime.now(utc).isoformat()))
         self.connection.commit()
         return chat_id
 
@@ -115,6 +117,10 @@ class ChatSQLite(Chat):
 
     def get_messages(self, chat_id: str) -> List[Dict]:
         """Returns the messages belonging to a chat, most recent last.
+
+        TODO: querying by chat_id is a potential vulnerability. If a
+        user's permisions to access a vector_namespace are revoked
+        they could still access it if they knew a chat_id.
         """
         cursor = self.connection.cursor()
         cursor.execute('''

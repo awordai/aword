@@ -3,6 +3,20 @@
 import pytest
 
 from aword.app import Awd
+from aword.logger import configure_logging
+
+
+def pytest_addoption(parser):
+    parser.addoption("--silent", action="store_true", default=False, help="Silence info logging")
+
+
+def pytest_configure(config):
+    # Read the command line options
+    debug = config.getoption("--debug")
+    silent = config.getoption("--silent")
+
+    # Configure logging
+    configure_logging(debug=debug, silent=silent)
 
 
 @pytest.fixture(scope='module')
@@ -16,14 +30,9 @@ def resdir():
     return 'test/res'
 
 
-@pytest.fixture(scope='module')
-def collection_name():
-    return 'test-collection'
-
-
 # pylint: disable=redefined-outer-name
 @pytest.fixture(scope='module')
-def ensure_empty_collection(awd, collection_name):
-    store = awd.get_store(collection_name)
-    store.client.delete_collection(collection_name)
-    awd.create_store_collection(collection_name)
+def ensure_empty_vector_namespace(awd):
+    store = awd.get_vector_store()
+    store.delete_namespace()
+    awd.create_vector_namespace()

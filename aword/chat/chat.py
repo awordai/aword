@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Chat database. It stores conversations.
+"""Chat with a persona.
 """
 
 import os
@@ -17,9 +17,8 @@ class Chat(ABC):
 
     @abstractmethod
     def new_chat(self,
-                 tenant_id: str,
                  user_id: str) -> str:
-        """Create a new chat for a tenant_id and a user_id. It should
+        """Create a new chat for a vector_namespace and a user_id. It should
         generate a unique id for the chat and return it.
         """
 
@@ -39,7 +38,6 @@ class Chat(ABC):
 
     def user_says(self,
                   persona_name: str,
-                  tenant_id: str,
                   user_id: str,
                   user_query: str,
                   chat_id: str = None,
@@ -50,14 +48,13 @@ class Chat(ABC):
         'reply' with the text of the reply.
         """
         if chat_id is None:
-            chat_id = self.new_chat(tenant_id, user_id)
             message_history = []
         else:
             message_history = self.get_messages(chat_id)
 
         persona = self.awd.get_persona(persona_name)
         try:
-            reply = persona.tell(user_query, message_history, collection_name=tenant_id)
+            reply = persona.tell(user_query, message_history)
         except Exception as e:
             self.awd.logger.error('Failed getting reply from %s, chat_id %s, user_query %s: \n%s',
                                   persona_name, chat_id, user_query, str(e))
@@ -79,7 +76,6 @@ class Chat(ABC):
 
         if attempts:
             return self.user_says(persona_name=persona_name,
-                                  tenant_id=tenant_id,
                                   user_id=user_id,
                                   user_query=user_query,
                                   chat_id=chat_id,
@@ -87,13 +83,15 @@ class Chat(ABC):
 
         return reply
 
-    def cli_chat(self, persona_name, tenant_id, user_id):
+    def cli_chat(self,
+                 persona_name: str,
+                 user_id: str,
+                 chat_id: str = None):
         """
         A command line chat interface using readline.
 
         Parameters:
         - persona_name: The name of the persona.
-        - tenant_id: The ID of the tenant.
         - user_id: The ID of the user.
         """
 
@@ -109,7 +107,7 @@ class Chat(ABC):
         if os.path.exists(history_file):
             readline.read_history_file(history_file)
 
-        chat_id = None  # Initialize the chat_id. It'll be updated once the chat starts.
+        chat_id = chat_id or self.new_chat(user_id)
 
         print(f"Hi, this is {persona_name}. Type 'exit' or 'x' to quit.")
 
@@ -154,13 +152,11 @@ class Chat(ABC):
             # Get the response on the main thread
             try:
                 response = self.user_says(persona_name=persona_name,
-                                          tenant_id=tenant_id,
                                           user_id=user_id,
                                           user_query=user_query,
                                           chat_id=chat_id)
                 if response['success']:
                     print(response['reply'])
-                    chat_id = response['chat_id']
                 else:
                     print("Sorry, couldn't process the message. Try again.")
             except Exception as e:
@@ -176,23 +172,44 @@ class Chat(ABC):
 
         print("Goodbye!")
 
+    def tell(self,
+            persona_name: str,
+            user_query: str):
+        persona = self.awd.get_persona(persona_name)
+        try:
+            reply = persona.tell(user_query, message_history=[])
+        except Exception as e:
+            self.awd.logger.error('Failed getting reply from %s, user_query %s: \n%s',
+                                  persona_name, user_query, str(e))
+            return {'reply': f'Failed at getting reply from {persona_name} for {user_query}',
+                    'success': False}
+        return reply
+
 
 def add_args(parser):
     import getpass
-    parser.add_argument('--tenant-id',
-                        help=('Tenant id'),
-                        type=str,
-                        default='test-collection')
+    import argparse
     parser.add_argument('--user-id',
                         help=('User id'),
                         type=str,
                         default=getpass.getuser())
+    parser.add_argument('--single-question',
+                        help='Ask a single question.',
+                        action='store_true')
     parser.add_argument('persona', help='Persona')
+    parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
 
 
 def main(awd, args):
+    from pprint import pprint
     chat = awd.get_chat()
     persona_name = args['persona'].replace('@', '')
-    chat.cli_chat(persona_name=persona_name,
-                  tenant_id=args['tenant_id'],
-                  user_id=args['user_id'])
+    if args['single_question']:
+        question = ' '.join(args['question'])
+        if len(question) < 5:
+            awd.logger.error('The question is too short')
+        else:
+            pprint(chat.tell(persona_name, question))
+    else:
+        chat.cli_chat(persona_name=persona_name,
+                      user_id=args['user_id'])

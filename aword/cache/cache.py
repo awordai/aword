@@ -28,7 +28,7 @@ class Cache(ABC):
             if len(words) > self.summarizer.get_param('summary_words'):
                 summary = self.summarizer.ask(text)
                 if summary['success']:
-                    return summary['reply']
+                    return summary['with_arguments']['summary']
                 return ' '.join(words[:self.summarizer.get_param('summary_words')]) + '...'
             return text
         return ''

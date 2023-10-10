@@ -28,20 +28,20 @@ class Persona(ABC):
     def __init__(self,
                  awd,
                  scopes: List[str],
-                 chunks_for_last_query,
+                 chunks_for_history,
                  chunks_per_conversation,
                  delimiter: str = '```',
                  background_fields: List[Union[str, tuple]] = None,
                  require_background=True):
         """The chunks per conversation are divided in two groups:
-        chunks_for_last_query will be semantically similar the last
-        query only, and the rest up to chunks_per_conversation will be
-        similar to the concatenation of user questions in the
-        conversation history.
+        chunks_for_history will be semantically similar the the
+        concatenation of user questions in the conversation history,
+        and the rest up to chunks_per_conversation will be similar to
+        the query.
         """
         self.awd = awd
         self.scopes = scopes
-        self.chunks_for_last_query = chunks_for_last_query
+        self.chunks_for_history = chunks_for_history
         self.chunks_per_conversation = chunks_per_conversation
         self.delimiter = delimiter
         self.background_fields = background_fields or (
@@ -59,7 +59,7 @@ class Persona(ABC):
     def format_background(self, payloads: List[Payload]) -> List[str]:
 
         def _format_payload(payload: Payload) -> str:
-            ctx_list = []# ['```']
+            ctx_list = []
 
             def _str(_value, _name):
                 if _name == 'uri':
@@ -69,7 +69,7 @@ class Persona(ABC):
                 return str(value)
 
             for field in self.background_fields:
-                if isinstance(field, tuple):
+                if isinstance(field, (tuple, list)):
                     field_name, field_label = field[:2]
                     if len(field) == 3:
                         separator = field[2]
@@ -86,9 +86,8 @@ class Persona(ABC):
                     value = _str(value, field_name)
 
                 if value:
-                    ctx_list.append(field_label + ': ' + value.replace('\n', ' '))
+                    ctx_list.append(field_label + ': ' + value)
 
-            # ctx_list.append('```')
             return '\n'.join(ctx_list)
 
         return [_format_payload(c) for c in payloads]
@@ -96,24 +95,23 @@ class Persona(ABC):
     def get_background(self,
                        user_query: str,
                        message_history: List[Dict],
-                       collection_name: str = None,
                        sources: Union[List[str], str] = None,
                        source_unit_ids: Union[List[str], str] = None,
                        categories: Union[List[str], str] = None,
                        contexts: Union[List[str], str] = None,
                        languages: Union[List[str], str] = None) -> str:
         embedder = self.awd.get_embedder()
-        store = self.awd.get_store(collection_name=collection_name)
+        store = self.awd.get_vector_store()
 
-        chunks_for_history = self.chunks_per_conversation - self.chunks_for_last_query
-        self.awd.logger.info('Requesting historical background with %d chunks',
-                             chunks_for_history)
+        chunks_for_last_query = self.chunks_per_conversation - self.chunks_for_history
         historical_background = []
         if message_history:
+            self.awd.logger.info('Requesting historical background with %d chunks',
+                                 self.chunks_for_history)
             historical_background = store.search(
                 query_vector=embedder.get_embeddings([' '.join([msg['content']
                                                                for msg in message_history])])[0],
-                limit=chunks_for_history,
+                limit=self.chunks_for_history,
                 sources=sources,
                 source_unit_ids=source_unit_ids,
                 categories=categories,
@@ -122,10 +120,10 @@ class Persona(ABC):
                 languages=languages)
 
         self.awd.logger.info('Requesting current query background with %d chunks',
-                             self.chunks_for_last_query)
+                             chunks_for_last_query)
         user_query_background = store.search(
             query_vector=embedder.get_embeddings([user_query])[0],
-            limit=self.chunks_for_last_query,
+            limit=chunks_for_last_query,
             sources=sources,
             source_unit_ids=source_unit_ids,
             categories=categories,
@@ -136,8 +134,9 @@ class Persona(ABC):
         background = (self.format_background(historical_background) +
                       self.format_background(user_query_background))
         if background:
-            background_str = '---\n'.join(background)
-            return f"\nBackground information:\n{background_str}"
+            background_str = '\nBackground information:\n' + '\n---\n'.join(background)
+            self.awd.logger.debug('Background:\n%s', background_str)
+            return background_str
 
         self.awd.logger.warning('No background available')
         return '\nNo more background available.'
@@ -161,7 +160,7 @@ class OAIPersona(Persona):
                  system_prompt: str,
                  user_prompt_preface: str = '',
                  chunks_per_conversation: int = 5,
-                 chunks_for_last_query: int = 4,
+                 chunks_for_history: int = 3,
                  temperature: int = 1,
                  delimiter: str = '```',
                  background_fields: List[Union[str, tuple]] = None,
@@ -169,7 +168,7 @@ class OAIPersona(Persona):
         super().__init__(awd=awd,
                          scopes=scopes,
                          chunks_per_conversation=chunks_per_conversation,
-                         chunks_for_last_query=chunks_for_last_query,
+                         chunks_for_history=chunks_for_history,
                          delimiter=delimiter,
                          background_fields=background_fields)
         oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
@@ -181,18 +180,18 @@ class OAIPersona(Persona):
         self.system_prompt = string.Template(system_prompt).substitute(params)
         self.user_prompt_preface = string.Template(user_prompt_preface).substitute(params)
         self.background_function = {
-            "name": "get_background_information",
-            "description": "Get relevant background information to generate a correct answer.",
+            "name": "update_background_information",
+            "description": ("If the background information is not good enough to give an answer "
+                            "call this function to refresh it."),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "summary_text": {
+                    "user_query": {
                         "type": "string",
-                        "description": ("A description of what the required "
-                                        "background information is for.")
+                        "description": ("The query you are trying to answer")
                     }
                 },
-                "required": ["summary_text"]
+                "required": ["user_query"]
             }
         }
 
@@ -213,7 +212,6 @@ class OAIPersona(Persona):
     def tell(self,
              user_query: str,
              message_history: List[Dict],
-             collection_name: str = None,
              with_background: str = '') -> Dict:
 
         messages, background = self.format_message_history(message_history)
@@ -227,16 +225,16 @@ class OAIPersona(Persona):
                     self.logger.info('Getting background for the first message')
                     background = self.get_background(
                         user_query=user_query,
-                        message_history=[],
-                        collection_name=collection_name)
+                        message_history=[])
 
             if not with_background:
                 self.logger.info('Requesting to ask for background')
                 functions = [self.background_function]
-                ask_for_background = ('\n- If the background information is not '
-                                      'enough to answer the question request to call '
+                ask_for_background = ('\n- Never say that the background is not enough. '
+                                      'If the background information is not '
+                                      'present or not relevant to the question call '
                                       'the function '
-                                      f"{self.background_function['name']}.")
+                                      f"{self.background_function['name']}")
                 self.logger.info('Calling completion with %s', self.background_function['name'])
             else:
                 functions = []
@@ -269,23 +267,14 @@ class OAIPersona(Persona):
                                           temperature=self.temperature)
 
         if out.get('call_function', '') == self.background_function['name']:
-            self.logger.info('Model requested background information')
-            if message_history:
-                summary_text = out.get('with_arguments', {})['summary_text']
-                if not summary_text:
-                    self.logger.error('Did not receive with_arguments from the model')
-                else:
-                    summary_text = summary_text + '\n'
-            else:
-                summary_text = ''
+            self.logger.info('Model requested background information for %s',
+                             out.get('with_arguments', {})['user_query'])
 
             return self.tell(user_query=user_query,
                              message_history=message_history,
-                             collection_name=collection_name,
                              with_background=self.get_background(
-                                 user_query=summary_text + user_query,
-                                 message_history=messages,
-                                 collection_name=collection_name))
+                                 user_query=user_query,
+                                 message_history=messages))
 
         self.logger.info('Replied @%s (%d tokens): %s, %s',
                          self.persona_name,

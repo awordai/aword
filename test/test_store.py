@@ -5,9 +5,9 @@ from aword.segment import Segment
 
 
 # pylint: disable=unused-argument
-def test_store(awd, ensure_empty_collection, resdir):
+def test_store(awd, ensure_empty_vector_namespace, resdir):
     embedder = awd.get_embedder()
-    store = awd.get_store()
+    store = awd.get_vector_store()
 
     with open(f'{resdir}/local/org/wands.org', encoding='utf-8') as wands_in:
         with open(f'{resdir}/local/org/trees.org', encoding='utf-8') as trees_in:
@@ -25,6 +25,7 @@ def test_store(awd, ensure_empty_collection, resdir):
             store.store_source_unit(embedder=embedder,
                                     source=source_1_2,
                                     source_unit_id='1',
+                                    source_unit_uri='http://uri-1',
                                     categories=categories_1,
                                     scope=scope_1,
                                     context=context_1,
@@ -38,6 +39,7 @@ def test_store(awd, ensure_empty_collection, resdir):
             store.store_source_unit(embedder=embedder,
                                     source=source_1_2,
                                     source_unit_id='1',
+                                    source_unit_uri='http://uri-1',
                                     categories=categories_1,
                                     scope=scope_1,
                                     context=context_1,
@@ -58,6 +60,7 @@ def test_store(awd, ensure_empty_collection, resdir):
             chunks = store.store_source_unit(embedder=embedder,
                                              source=source_1_2,
                                              source_unit_id='2',
+                                             source_unit_uri='http://uri-2',
                                              categories=categories_2,
                                              scope=scope_support,
                                              context=context_2,
@@ -77,6 +80,7 @@ def test_store(awd, ensure_empty_collection, resdir):
             chunks = store.store_source_unit(embedder=embedder,
                                              source=source_3,
                                              source_unit_id='3',
+                                             source_unit_uri='http://uri-3',
                                              categories=categories_3,
                                              scope=scope_support,
                                              context=context_2,

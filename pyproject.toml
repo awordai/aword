@@ -10,8 +10,11 @@ authors = [
     { name = "Joan Reyero", email="joan@crowd.dev" },
     { name = "Juan Reyero", email="juan@juanreyero.com" }
 ]
+
 requires-python = ">=3.8"
+
 # license = { file="LICENSE" }
+
 dependencies = [
     "openai >= 0.27.2",
     "qdrant-client >= 1.1.0",
@@ -25,8 +28,12 @@ dependencies = [
     "langdetect >= 1.0.9",
     "tiktoken",
     "sentence_transformers",
-    "gnureadline"
+    "gnureadline",
+    "bs4",
+    "robotexclusionrulesparser",
+    "PyPDF2"
 ]
+
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -53,7 +60,7 @@ aword = "aword.app:app"
 ask = "aword.model.respondent:main"
 
 [tool.pytest.ini_options]
-addopts = "--ignore=build --ignore=doc --ignore=flymake"
+addopts = "--ignore=build --ignore=doc --ignore=flymake --log-cli-level=INFO --capture=no"
 pythonpath = [
   "."
 ]

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Query the vector store.
+"""
 
 import uuid
 from typing import List, Dict, Union
-from pprint import pformat
+from pprint import pformat, pprint
 from abc import ABC, abstractmethod
 
 from qdrant_client import models
@@ -14,16 +16,16 @@ from aword.chunk import Chunk, Payload
 from aword.segment import Segment
 
 
-def make_store(awd,
-               collection_name: str,
-               config: Dict):
-    """In a multi-tenant environment the collection_name is the
+def make_vector_store(awd,
+                      vector_namespace: str,
+                      config: Dict):
+    """In a multi-tenant environment the vector_namespace is the
     tenant_id.
     """
     provider = config.get('provider', 'qdrant')
     if provider == 'qdrant':
-        # collection_name can come in the config, overriding it if so.
-        return QdrantStore(awd, **{**config, **{'collection_name': collection_name}})
+        # vector_namespace can come in the config, overriding it if so.
+        return QdrantStore(awd, **{**config, **{'vector_namespace': vector_namespace}})
 
     raise ValueError(f'Unknown vector store provider {provider}')
 
@@ -55,11 +57,21 @@ class Store(ABC):
         scope and a context.
         """
 
+    @abstractmethod
+    def create_namespace(self, dimensions: int):
+        """Create a vector namespace (collection in qdrant)
+        """
+
+    @abstractmethod
+    def delete_namespace(self):
+        """Delete a vector namespace (collection in qdrant)
+        """
+
     def store_source_unit(self,
                           embedder: Embedder,
                           source: str,
                           source_unit_id: str,
-                          uri: str,
+                          source_unit_uri: str,
                           categories: str,
                           scope: str,  # confidential, public
                           context: str,  # historical, reference, internal_comm...
@@ -81,7 +93,7 @@ class Store(ABC):
             for chunk in chunks:
                 chunk.payload.source = source
                 chunk.payload.source_unit_id = source_unit_id
-                chunk.payload.uri = uri
+                chunk.payload.uri = segment.uri or source_unit_uri
                 chunk.payload.categories = categories
                 chunk.payload.scope = scope
                 chunk.payload.context = context
@@ -102,13 +114,13 @@ class QdrantStore(Store):
 
     def __init__(self,
                  awd,
-                 collection_name,
+                 vector_namespace,
                  local_db: str = None,
                  url: str = None,
                  distance: str = 'cosine',
                  **_):
         super().__init__(awd)
-        self.collection_name = collection_name
+        self.collection_name = vector_namespace
         self.distance = distance
 
         if url:
@@ -124,12 +136,12 @@ class QdrantStore(Store):
 
         self.client = QdrantClient(**client_pars)
         try:
-            self.client.get_collection(collection_name=collection_name)
+            self.client.get_collection(collection_name=self.collection_name)
         except:
-            self.logger.warn('Collection %s does not exist, creating it', collection_name)
-            self.create_collection(dimensions=awd.get_embedder().dimensions)
+            self.logger.warn('Collection %s does not exist, creating it', self.collection_name)
+            self.create_namespace(dimensions=awd.get_embedder().dimensions)
 
-    def create_collection(self, dimensions: int):
+    def create_namespace(self, dimensions: int):
         distance = {'dot': models.Distance.DOT,
                     'cosine': models.Distance.COSINE,
                     'euclid': models.Distance.EUCLID}[self.distance]
@@ -163,6 +175,10 @@ class QdrantStore(Store):
                                          field_schema="keyword")
 
         self.logger.info('Created collection %s', self.collection_name)
+
+    def delete_namespace(self):
+        self.logger.warn('Deleting namespace %s', self.collection_name)
+        self.client.delete_collection(self.collection_name)
 
     def create_filter(self,
                       sources: Union[List[str], str] = None,
@@ -325,23 +341,46 @@ class QdrantStore(Store):
 
 
 def add_args(parser):
+    import argparse
     parser.add_argument('--source',
                         help='Limit listings and actions to this source.',
                         type=str)
+
     parser.add_argument('--source-unit-id',
                         help=('Limit listings and actions to this source unit id. '
                               'It only makes sense if source is also defined with --source.'),
                         type=str)
 
-    parser.add_argument('--count-embeddings',
-                        help=('Count the embeddings.'),
+    parser.add_argument('--count',
+                        help='Count the items in the namespace.',
                         action='store_true')
+
+    parser.add_argument('--list',
+                        help='List the namespace',
+                        action='store_true')
+
+    parser.add_argument('--delete-namespace',
+                        help='Delete the namespace. Set to "really".',
+                        type=str)
+
+    parser.add_argument('--search-limit',
+                        help='Number of results to return for a search.',
+                        type=int,
+                        default=3)
+
+    parser.add_argument('--search',
+                        help='Embed the question and return the payloads.',
+                        action='store_true')
+
+    parser.add_argument('search_terms',
+                        nargs=argparse.REMAINDER,
+                        help='Terms to search for.')
 
 
 def main(awd, args):
+    import sys
     if args['source_unit_id'] and not args['source']:
         awd.logger.error('Got source-unit-id but no source, please specify one.')
-        import sys
         sys.exit(1)
 
     filter_args = {}
@@ -350,6 +389,24 @@ def main(awd, args):
     if args['source_unit_id']:
         filter_args['source_unit_ids'] = [args['source_unit_id']]
 
-    store = awd.get_store()
-    if args['count_embeddings']:
+    store = awd.get_vector_store()
+    if args['count']:
         print(store.count(**filter_args))
+
+    if args['list']:
+        for point in store.fetch_all(**filter_args):
+            pprint(dict(point))
+
+    if args['delete_namespace'] == 'really':
+        store.delete_namespace()
+
+    if args['search']:
+        if not args['search_terms']:
+            awd.logger.error('Please tell me what to search for')
+            sys.exit(1)
+        embedder = awd.get_embedder()
+        query_vector = embedder.get_embeddings([' '.join(args['search_terms'])])[0]
+        for point in store.search(
+                query_vector=query_vector,
+                limit=args['search_limit']):
+            pprint(dict(point))

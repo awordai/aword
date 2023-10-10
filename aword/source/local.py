@@ -13,7 +13,7 @@ from aword.source.parser import markdown
 from aword.source.parser import plain
 
 
-def add_to_cache(awd: Awd,
+def update_cache(awd: Awd,
                  only_in_directory: bool = None):
     supported_extensions = ['org', 'md', 'txt', 'text']
 
@@ -84,14 +84,3 @@ def add_to_cache(awd: Awd,
                                         file_path, last_stored_edit_dt)
 
     return all_segments
-
-
-def add_args(parser):
-    parser.add_argument('--add-to-cache',
-                        action='store_true',
-                        help='Add local documents to the cache')
-
-
-def main(awd, args):
-    if args['add_to_cache']:
-        add_to_cache(awd)
