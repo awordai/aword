@@ -9,9 +9,8 @@ from typing import Dict
 from aword.apis import oai
 import aword.errors as E
 
-def make_respondent(awd,
-                    respondent_name: str,
-                    config: Dict):
+
+def make_respondent(awd, respondent_name: str, config: Dict):
     provider = config.get('provider', 'openai')
 
     if provider == 'openai':
@@ -21,15 +20,16 @@ def make_respondent(awd,
 
 
 class OAIRespondent:
-
-    def __init__(self,
-                 awd,
-                 respondent_name: str,
-                 model_name: str,
-                 system_prompt: str,
-                 call_function: Dict,
-                 user_prompt_preface: str = '',
-                 **params):
+    def __init__(
+        self,
+        awd,
+        respondent_name: str,
+        model_name: str,
+        system_prompt: str,
+        call_function: Dict,
+        user_prompt_preface: str = '',
+        **params,
+    ):
         oai.ensure_api(awd.getenv('OPENAI_API_KEY'))
 
         self.logger = awd.logger
@@ -45,45 +45,41 @@ class OAIRespondent:
         self.call_function = call_function
 
     def get_param(self, parname: str):
-        return self.params[parname]
+        return self.params.get(parname, None)
 
-    def ask(self,
-            text: str,
-            temperature: float = 1,
-            attempts: int = 2):
-        self.logger.info('Asked @%s: %s',
-                         self.respondent_name,
-                         text[:80].replace('\n', ' '))
+    def ask(self, text: str, temperature: float = 1, attempts: int = 2):
+        self.logger.info('Asked @%s: %s', self.respondent_name, text[:80].replace('\n', ' '))
         try:
             out = oai.chat_completion_request(
-                messages=[{'role': 'system',
-                           'content': self.system_prompt},
-                          {'role': 'user',
-                           'content': self.user_prompt_preface + text}],
+                messages=[
+                    {'role': 'system', 'content': self.system_prompt},
+                    {'role': 'user', 'content': self.user_prompt_preface + text},
+                ],
                 functions=[self.call_function],
                 call_function=self.call_function['name'],
                 model_name=self.model_name,
-                temperature=temperature)
+                temperature=temperature,
+            )
         except Exception as e:
             # This means that the request was not correctly formed, do not try again
-            if isinstance(e, E.AwordModelRequestError):
-                raise
-            if attempts:
+            if attempts and not isinstance(e, E.AwordModelRequestError):
                 time.sleep(0.5)
-                return self.ask(text, temperature, attempts-1)
+                return self.ask(text, temperature, attempts - 1)
 
-            out = {'success': False,
-                   'reply': {'error': f'Failed at generating reply: {str(e)}'}}
+            out = {'success': False, 'reply': {'error': f'Failed at generating reply: {str(e)}'}}
 
-        self.logger.info('Replied @%s (%s):\n%s',
-                         self.respondent_name,
-                         'success' if out['success'] else 'failure',
-                         pformat(out['with_arguments']))
+        self.logger.info(
+            'Replied @%s (%s):\n%s',
+            self.respondent_name,
+            'success' if out['success'] else 'failure',
+            pformat(out.get('with_arguments', '** failed to get a json with arguments **')),
+        )
         return out
 
 
 def add_args(parser):
     import argparse
+
     parser.add_argument('respondent', help='Respondent')
     parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
 

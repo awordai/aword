@@ -11,21 +11,17 @@ import gnureadline as readline
 
 
 class Chat(ABC):
-
     def __init__(self, awd):
         self.awd = awd
 
     @abstractmethod
-    def new_chat(self,
-                 user_id: str) -> str:
+    def new_chat(self, user_id: str) -> str:
         """Create a new chat for a vector_namespace and a user_id. It should
         generate a unique id for the chat and return it.
         """
 
     @abstractmethod
-    def append_messages(self,
-                        chat_id: str,
-                        messages: List[Dict]):
+    def append_messages(self, chat_id: str, messages: List[Dict]):
         """Append a list of messages to a chat. It should create a row
         for each message. Messages are dictionaries with a 'role'
         ('system', 'user', 'assistant', 'function') and 'content'.
@@ -33,15 +29,16 @@ class Chat(ABC):
 
     @abstractmethod
     def get_messages(self, chat_id: str) -> List[Dict]:
-        """Return the messages belonging to a chat. Most recent last.
-        """
+        """Return the messages belonging to a chat. Most recent last."""
 
-    def user_says(self,
-                  persona_name: str,
-                  user_id: str,
-                  user_query: str,
-                  chat_id: str = None,
-                  attempts: int = 2) -> Dict:
+    def user_says(
+        self,
+        persona_name: str,
+        user_id: str,
+        user_query: str,
+        chat_id: str = None,
+        attempts: int = 2,
+    ) -> Dict:
         """Receives input from the user, and replies. The reply is a
         dictionary with an entry 'chat_id' that will be used to refer
         to the chat later, a boolean entry 'success', an an entry
@@ -56,37 +53,47 @@ class Chat(ABC):
         try:
             reply = persona.tell(user_query, message_history)
         except Exception as e:
-            self.awd.logger.error('Failed getting reply from %s, chat_id %s, user_query %s: \n%s',
-                                  persona_name, chat_id, user_query, str(e))
-            return {'reply': f'Failed at getting reply from {persona_name} for {user_query}',
-                    'success': False,
-                    'chat_id': chat_id}
+            self.awd.logger.error(
+                'Failed getting reply from %s, chat_id %s, user_query %s: \n%s',
+                persona_name,
+                chat_id,
+                user_query,
+                str(e),
+            )
+            return {
+                'reply': f'Failed at getting reply from {persona_name} for {user_query}',
+                'success': False,
+                'chat_id': chat_id,
+            }
 
         if reply['success']:
             self.awd.logger.info('Storing messages')
-            self.append_messages(chat_id=chat_id,
-                                 messages=[{'role': 'user',
-                                            'said': reply['user_says'],
-                                            'background': reply['background']},
-                                           {'role': 'assistant',
-                                            'name': persona_name,
-                                            'said': reply['reply']}])
+            self.append_messages(
+                chat_id=chat_id,
+                messages=[
+                    {
+                        'role': 'user',
+                        'said': reply['user_says'],
+                        'background': reply['background'],
+                    },
+                    {'role': 'assistant', 'name': persona_name, 'said': reply['reply']},
+                ],
+            )
             reply['chat_id'] = chat_id
             return reply
 
         if attempts:
-            return self.user_says(persona_name=persona_name,
-                                  user_id=user_id,
-                                  user_query=user_query,
-                                  chat_id=chat_id,
-                                  attempts=attempts - 1)
+            return self.user_says(
+                persona_name=persona_name,
+                user_id=user_id,
+                user_query=user_query,
+                chat_id=chat_id,
+                attempts=attempts - 1,
+            )
 
         return reply
 
-    def cli_chat(self,
-                 persona_name: str,
-                 user_id: str,
-                 chat_id: str = None):
+    def cli_chat(self, persona_name: str, user_id: str, chat_id: str = None):
         """
         A command line chat interface using readline.
 
@@ -95,14 +102,14 @@ class Chat(ABC):
         - user_id: The ID of the user.
         """
 
-        # pylint: disable=c-extension-no-member
-        readline.read_init_file(os.path.expanduser('~/.inputrc'))
+        if os.path.exists(os.path.expanduser('~/.inputrc')):
+            # pylint: disable=c-extension-no-member
+            readline.read_init_file(os.path.expanduser('~/.inputrc'))
 
         history_dir = os.path.expanduser('~/.aword')
         if not os.path.exists(history_dir):
             os.makedirs(history_dir)
-        history_file = os.path.join(
-            history_dir, 'chat-history')
+        history_file = os.path.join(history_dir, 'chat-history')
 
         if os.path.exists(history_file):
             readline.read_history_file(history_file)
@@ -151,10 +158,12 @@ class Chat(ABC):
 
             # Get the response on the main thread
             try:
-                response = self.user_says(persona_name=persona_name,
-                                          user_id=user_id,
-                                          user_query=user_query,
-                                          chat_id=chat_id)
+                response = self.user_says(
+                    persona_name=persona_name,
+                    user_id=user_id,
+                    user_query=user_query,
+                    chat_id=chat_id,
+                )
                 if response['success']:
                     print(response['reply'])
                 else:
@@ -172,36 +181,37 @@ class Chat(ABC):
 
         print("Goodbye!")
 
-    def tell(self,
-            persona_name: str,
-            user_query: str):
+    def tell(self, persona_name: str, user_query: str):
         persona = self.awd.get_persona(persona_name)
         try:
             reply = persona.tell(user_query, message_history=[])
         except Exception as e:
-            self.awd.logger.error('Failed getting reply from %s, user_query %s: \n%s',
-                                  persona_name, user_query, str(e))
-            return {'reply': f'Failed at getting reply from {persona_name} for {user_query}',
-                    'success': False}
+            self.awd.logger.error(
+                'Failed getting reply from %s, user_query %s: \n%s',
+                persona_name,
+                user_query,
+                str(e),
+            )
+            return {
+                'reply': f'Failed at getting reply from {persona_name} for {user_query}',
+                'success': False,
+            }
         return reply
 
 
 def add_args(parser):
     import getpass
     import argparse
-    parser.add_argument('--user-id',
-                        help=('User id'),
-                        type=str,
-                        default=getpass.getuser())
-    parser.add_argument('--single-question',
-                        help='Ask a single question.',
-                        action='store_true')
+
+    parser.add_argument('--user-id', help=('User id'), type=str, default=getpass.getuser())
+    parser.add_argument('--single-question', help='Ask a single question.', action='store_true')
     parser.add_argument('persona', help='Persona')
     parser.add_argument('question', nargs=argparse.REMAINDER, help='Question')
 
 
 def main(awd, args):
     from pprint import pprint
+
     chat = awd.get_chat()
     persona_name = args['persona'].replace('@', '')
     if args['single_question']:
@@ -211,5 +221,4 @@ def main(awd, args):
         else:
             pprint(chat.tell(persona_name, question))
     else:
-        chat.cli_chat(persona_name=persona_name,
-                      user_id=args['user_id'])
+        chat.cli_chat(persona_name=persona_name, user_id=args['user_id'])

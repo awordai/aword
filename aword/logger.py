@@ -34,9 +34,7 @@ class Formatter(logging.Formatter):
         return super().format(record)
 
 
-def configure_logging(debug: bool = False,
-                      silent: bool = False,
-                      logs_dir: str = 'logs'):
+def configure_logging(debug: bool = False, silent: bool = False, logs_dir: str = 'logs'):
     global Debug
     Debug = debug
 
@@ -60,8 +58,8 @@ def configure_logging(debug: bool = False,
             'aword': {
                 'level': 'DEBUG',
                 'propagate': False,
-                'handlers': ['maybe_console_handler'] + (['rotating_file_handler']
-                                                         if log_file_path else []),
+                'handlers': ['maybe_console_handler']
+                + (['rotating_file_handler'] if log_file_path else []),
             }
         },
         'handlers': {
@@ -77,21 +75,15 @@ def configure_logging(debug: bool = False,
                 'class': 'logging.handlers.RotatingFileHandler',
                 'filename': log_file_path,
                 'mode': 'a',
-            }
+            },
         },
         'formatters': {
-            'console': {
-                '()': Formatter
-            },
+            'console': {'()': Formatter},
             'file': {
-                'format': ('%(asctime)s::%(levelname)s::'
-                           '%(module)s|%(lineno)s:: %(message)s'),
-                'datefmt': '%Y-%m-%dT%H:%M:%S'
+                'format': ('%(asctime)s::%(levelname)s::' '%(module)s|%(lineno)s:: %(message)s'),
+                'datefmt': '%Y-%m-%dT%H:%M:%S',
             },
-            'simple_file': {
-                'format': '%(asctime)s:: %(message)s',
-                'datefmt': '%Y-%m-%dT%H:%M:%S'
-            },
+            'simple_file': {'format': '%(asctime)s:: %(message)s', 'datefmt': '%Y-%m-%dT%H:%M:%S'},
         },
     }
 

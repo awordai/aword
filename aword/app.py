@@ -8,7 +8,7 @@ import logging
 import configparser
 from datetime import datetime
 from importlib import import_module
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 from dotenv import load_dotenv
 from pytz import utc
@@ -19,20 +19,19 @@ import aword.errors as E
 class Awd:
     def __init__(
         self,
-        vector_namespace: str = None,
-        environment_name: str = '',
-        config_dir: str = None,
+        vector_namespace: Optional[str] = None,
+        dot_env_file: str = '',
+        config_dir: Optional[str] = None,
     ):
         self.config_dir = config_dir
-        self.environment_name = environment_name
 
         self.logger = logging.getLogger('aword')
-        env_file = '.env' + ('.' if environment_name else '') + environment_name
-        if os.path.exists(env_file):
-            self.logger.info('Loading env file %s', env_file)
-            load_dotenv(env_file)
-        else:
-            self.logger.info('Not found env file %s', env_file)
+        if dot_env_file:
+            if os.path.exists(dot_env_file):
+                self.logger.info('Loading env file %s', dot_env_file)
+                load_dotenv(dot_env_file)
+            else:
+                self.logger.info('Not found env file %s', dot_env_file)
 
         self.environment = {
             'TESTING': '',
@@ -119,9 +118,7 @@ class Awd:
     def get_single_source_config(
         self, source_name: str, default: Union[Dict, List] = None
     ) -> Union[Dict, List]:
-        return self.get_sources_config().get(
-            source_name, default if default is not None else {}
-        )
+        return self.get_sources_config().get(source_name, default if default is not None else {})
 
     def get_model_config(self) -> Dict:
         embedding_config = self.get_config('embedding')
@@ -160,9 +157,7 @@ class Awd:
             from aword.model.embedder import make_embedder
 
             model_config = self.get_json_config('models').get(model_name, {})
-            self._embedder[model_name] = make_embedder(
-                self, {**model_config, **embedding_config}
-            )
+            self._embedder[model_name] = make_embedder(self, {**model_config, **embedding_config})
 
         return self._embedder[model_name]
 
@@ -170,24 +165,17 @@ class Awd:
         if respondent_name not in self._respondents:
             respondents_config = self.get_json_config('respondents')
             if respondent_name not in respondents_config:
-                raise E.AwordError(
-                    f'No configuration found for respondent {respondent_name}'
-                )
+                raise E.AwordError(f'No configuration found for respondent {respondent_name}')
             config = respondents_config[respondent_name].copy()
 
             if 'system_prompt' not in config:
                 if 'system_prompt_file' not in config:
-                    raise E.AwordError(
-                        f'Need a system prompt in the config of {respondent_name}'
-                    )
+                    raise E.AwordError(f'Need a system prompt in the config of {respondent_name}')
 
                 with open(config['system_prompt_file'], encoding='utf-8') as fin:
                     config['system_prompt'] = fin.read()
 
-            if (
-                'user_prompt_preface' not in config
-                and 'user_prompt_preface_file' in config
-            ):
+            if 'user_prompt_preface' not in config and 'user_prompt_preface_file' in config:
                 with open(config['user_prompt_preface_file'], encoding='utf-8') as fin:
                     config['user_prompt_preface'] = fin.read()
 
@@ -209,19 +197,12 @@ class Awd:
 
             if 'system_prompt' not in config:
                 if 'system_prompt_file' not in config:
-                    raise RuntimeError(
-                        f'Need a system prompt in the config of {persona_name}'
-                    )
+                    raise RuntimeError(f'Need a system prompt in the config of {persona_name}')
 
-                with open(
-                    self.find_config(config['system_prompt_file']), encoding='utf-8'
-                ) as fin:
+                with open(self.find_config(config['system_prompt_file']), encoding='utf-8') as fin:
                     config['system_prompt'] = fin.read()
 
-            if (
-                'user_prompt_preface' not in config
-                and 'user_prompt_preface_file' in config
-            ):
+            if 'user_prompt_preface' not in config and 'user_prompt_preface_file' in config:
                 with open(config['user_prompt_preface_file'], encoding='utf-8') as fin:
                     config['user_prompt_preface'] = fin.read()
 
@@ -242,9 +223,7 @@ class Awd:
 
     def get_vector_store(self):
         vector_config = self.get_config('vector')
-        vector_namespace = self.vector_namespace or vector_config.get(
-            'default_namespace', None
-        )
+        vector_namespace = self.vector_namespace or vector_config.get('default_namespace', None)
 
         if vector_namespace is None:
             # If there's only one vector_store, return it
@@ -252,12 +231,10 @@ class Awd:
                 return next(iter(self._vector_store.values()))
             if not self._vector_store:
                 raise ValueError(
-                    'There are no vector stores available, '
-                    'please specify a vector_namespace'
+                    'There are no vector stores available, ' 'please specify a vector_namespace'
                 )
             raise ValueError(
-                "There are multiple vector stores available, "
-                "please specify a vector_namespace."
+                "There are multiple vector stores available, " "please specify a vector_namespace."
             )
 
         if vector_namespace not in self._vector_store:
@@ -308,7 +285,7 @@ class Awd:
 
         return self._chat
 
-    def update_cache(self, sources: List[str] = None):
+    def update_cache(self, sources: Optional[List[str]] = None):
         for source_name in sources or self.get_sources_config().keys():
             processor = import_module(f'aword.source.{source_name}')
             processor.update_cache(self)
@@ -404,14 +381,10 @@ def app():
     core_arguments = {
         ('-v', '--verbose'): {'help': 'Enable info logs.', 'action': 'store_true'},
         ('-d', '--debug'): {'help': 'Enable debug logs.', 'action': 'store_true'},
-        ('-e', '--environment'): {
-            'help': (
-                'Environment name. If set, for example, to dev '
-                'the file .env.dev will be loaded if existing. '
-                'If not set the file .env will be loaded if existing.'
-            ),
+        ('-e', '--dot-env'): {
+            'help': ('A .env file.'),
             'type': str,
-            'default': '',
+            'default': '.env',
         },
         ('-L', '--logs-dir'): {
             'help': 'Directory for the logs.',
@@ -431,9 +404,7 @@ def app():
             '-V',
             '--vector-namespace',
         ): {
-            'help': (
-                'Overrides the default_namespace in ' 'the vector store configuration.'
-            ),
+            'help': ('Overrides the default_namespace in ' 'the vector store configuration.'),
             'type': str,
         },
     }
@@ -517,7 +488,7 @@ def app():
     dict_args['mode'] = command
 
     awd = Awd(
-        environment_name=global_args.environment,
+        dot_env_file=global_args.dot_env,
         config_dir=global_args.config_dir,
         vector_namespace=global_args.vector_namespace,
     )

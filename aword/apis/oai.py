@@ -22,43 +22,46 @@ def ensure_api(api_key):
     global Api_loaded
     if not Api_loaded:
         if not api_key:
-            raise E.AwordError('Cannot find an openai key in the environment, try setting '
-                               'the AWORD_OPENAI_KEY environment variable')
+            raise E.AwordError(
+                'Cannot find an openai key in the environment, try setting '
+                'the AWORD_OPENAI_KEY environment variable'
+            )
         openai.api_key = api_key
         Api_loaded = True
 
 
-@retry(wait=wait_random_exponential(min=1, max=20),
-       stop=stop_after_attempt(6),
-       retry=retry_if_not_exception_type(openai.InvalidRequestError))
-def fetch_embeddings(text_or_tokens_array: List[str],
-                     model_name: str) -> List[List[float]]:
-    return [r['embedding'] for r in
-            openai.Embedding.create(input=text_or_tokens_array,
-                                    model=model_name)["data"]]
+@retry(
+    wait=wait_random_exponential(min=1, max=20),
+    stop=stop_after_attempt(6),
+    retry=retry_if_not_exception_type(openai.InvalidRequestError),
+)
+def fetch_embeddings(text_or_tokens_array: List[str], model_name: str) -> List[List[float]]:
+    return [
+        r['embedding']
+        for r in openai.Embedding.create(input=text_or_tokens_array, model=model_name)["data"]
+    ]
 
 
-def get_embeddings(chunked_texts: List[str],
-                   model_name: str) -> List[float]:
+def get_embeddings(chunked_texts: List[str], model_name: str) -> List[float]:
     # Split text_chunks into shorter arrays of max length 100
     max_batch_size = 100
-    text_chunks_arrays = [chunked_texts[i:i+max_batch_size]
-                          for i in range(0, len(chunked_texts), max_batch_size)]
+    text_chunks_arrays = [
+        chunked_texts[i : i + max_batch_size] for i in range(0, len(chunked_texts), max_batch_size)
+    ]
 
     embeddings = []
     for text_chunks_array in text_chunks_arrays:
-        embeddings += fetch_embeddings(text_chunks_array,
-                                       model_name)
+        embeddings += fetch_embeddings(text_chunks_array, model_name)
 
     return embeddings
 
 
-@retry(wait=wait_random_exponential(min=1, max=20),
-       stop=stop_after_attempt(6),
-       retry=retry_if_not_exception_type(openai.InvalidRequestError))
-def chat(model_name: str,
-         system_prompt: str,
-         user_prompt: str):
+@retry(
+    wait=wait_random_exponential(min=1, max=20),
+    stop=stop_after_attempt(6),
+    retry=retry_if_not_exception_type(openai.InvalidRequestError),
+)
+def chat(model_name: str, system_prompt: str, user_prompt: str):
     return openai.ChatCompletion.create(
         model=model_name,
         messages=[
@@ -68,19 +71,20 @@ def chat(model_name: str,
     )["choices"][0]["message"]["content"]
 
 
-@retry(wait=wait_random_exponential(min=1, max=20),
-       stop=stop_after_attempt(6),
-       retry=retry_if_not_exception_type(E.AwordError))
-def chat_completion_request(messages: List[Dict],
-                            functions: List[Dict] = None,
-                            call_function: str = None,
-                            temperature: float = 1,  # 0 to 2
-                            model_name: str = GPT_MODEL,
-                            attempts: int = 4) -> Dict:
-    args = {'model': model_name,
-            'messages': messages,
-            'temperature': temperature,
-            'n': 1}
+# @retry(
+#     wait=wait_random_exponential(min=1, max=20),
+#     stop=stop_after_attempt(6),
+#     retry=retry_if_not_exception_type(E.AwordError),
+# )
+def chat_completion_request(
+    messages: List[Dict],
+    functions: List[Dict] = None,
+    call_function: str = None,
+    temperature: float = 1,  # 0 to 2
+    model_name: str = GPT_MODEL,
+    attempts: int = 2,
+) -> Dict:
+    args = {'model': model_name, 'messages': messages, 'temperature': temperature, 'n': 1}
 
     if functions:
         args['functions'] = functions
@@ -99,42 +103,82 @@ def chat_completion_request(messages: List[Dict],
 
     try:
         logger = logging.getLogger(__name__)
-        logger.info('Calling openai.ChatCompletion with model %s and temperature %.1f',
-                    model_name,
-                    temperature)
-        logger.debug('openai.ChatCompletion arguments:\n\n%s', pformat(args))
+        logger.info(
+            'Calling openai.ChatCompletion with model %s and temperature %.1f',
+            model_name,
+            temperature,
+        )
+        # logger.debug('openai.ChatCompletion arguments:\n\n%s', pformat(args))
         # Should check finish_reason in case it is 'length', which
         # would mean too many tokens.
         # https://platform.openai.com/docs/api-reference/chat/object#chat/object-finish_reason
 
         response = openai.ChatCompletion.create(**args)
-        meta = {'model': response['model'],
-                'prompt_tokens': response['usage']['prompt_tokens'],
-                'completion_tokens': response['usage']['completion_tokens'],
-                'total_tokens': response['usage']['total_tokens']}
+        meta = {
+            'model': response['model'],
+            'prompt_tokens': response['usage']['prompt_tokens'],
+            'completion_tokens': response['usage']['completion_tokens'],
+            'total_tokens': response['usage']['total_tokens'],
+        }
+        # logger.info('Total tokens: %d', meta['total_tokens'])
+
+        cost = {
+            'gpt-3.5-turbo': {
+                'prompt': 0.0015,
+                'completion': 0.002,
+            },
+            'gpt-3.5-turbo-0613': {
+                'prompt': 0.0015,
+                'completion': 0.002,
+            },
+            'gpt-3.5-turbo-16k': {
+                'prompt': 0.003,
+                'completion': 0.004,
+            },
+            'gpt-3.5-turbo-16k-0613': {
+                'prompt': 0.003,
+                'completion': 0.004,
+            },
+            'gpt-4': {
+                'prompt': 0.03,
+                'completion': 0.06,
+            },
+            'gpt-4-0613': {
+                'prompt': 0.03,
+                'completion': 0.06,
+            },
+        }
+        logger.info(
+            'Request cost: $%f'
+            % (
+                meta['prompt_tokens'] * cost[model_name]['prompt'] / 1000
+                + meta['completion_tokens'] * cost[model_name]['completion'] / 1000
+            )
+        )
 
         # The message can have either call_function or a content.
         message = response["choices"][0]["message"]
         function_call = message.get('function_call', None)
         if function_call:
             try:
-                return {'call_function': function_call['name'],
-                        'with_arguments': json.loads(function_call['arguments']),
-                        'success': True,
-                        **meta}
-            except:
+                return {
+                    'call_function': function_call['name'],
+                    'with_arguments': json.loads(function_call['arguments']),
+                    'success': True,
+                    **meta,
+                }
+            except Exception as e:
                 if attempts:
-                    return chat_completion_request(messages=messages,
-                                                   functions=functions,
-                                                   call_function=call_function,
-                                                   temperature=temperature/2,
-                                                   model_name=model_name,
-                                                   attempts=attempts-1)
-                return {'success': False,
-                        **meta}
-        return {'reply': message['content'],
-                'success': True,
-                **meta}
+                    return chat_completion_request(
+                        messages=messages,
+                        functions=functions,
+                        call_function=call_function,
+                        temperature=temperature / 2,
+                        model_name=model_name,
+                        attempts=attempts - 1,
+                    )
+                return {'success': False, **meta}
+        return {'reply': message['content'], 'success': True, **meta}
     except openai.InvalidRequestError as exc:
         raise E.AwordModelRequestError('Invalid request error from OpenAI') from exc
     # TODO: if it is a RateLimitError we should check if the rate
