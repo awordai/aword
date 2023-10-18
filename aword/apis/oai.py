@@ -113,15 +113,6 @@ def chat_completion_request(
         # would mean too many tokens.
         # https://platform.openai.com/docs/api-reference/chat/object#chat/object-finish_reason
 
-        response = openai.ChatCompletion.create(**args)
-        meta = {
-            'model': response['model'],
-            'prompt_tokens': response['usage']['prompt_tokens'],
-            'completion_tokens': response['usage']['completion_tokens'],
-            'total_tokens': response['usage']['total_tokens'],
-        }
-        # logger.info('Total tokens: %d', meta['total_tokens'])
-
         cost = {
             'gpt-3.5-turbo': {
                 'prompt': 0.0015,
@@ -148,13 +139,20 @@ def chat_completion_request(
                 'completion': 0.06,
             },
         }
-        logger.info(
-            'Request cost: $%f'
-            % (
-                meta['prompt_tokens'] * cost[model_name]['prompt'] / 1000
-                + meta['completion_tokens'] * cost[model_name]['completion'] / 1000
-            )
+
+        response = openai.ChatCompletion.create(**args)
+        meta = {
+            'model': response['model'],
+            'prompt_tokens': response['usage']['prompt_tokens'],
+            'completion_tokens': response['usage']['completion_tokens'],
+            'total_tokens': response['usage']['total_tokens'],
+        }
+        meta['request_cost'] = (
+            meta['prompt_tokens'] * cost[model_name]['prompt'] / 1000
+            + meta['completion_tokens'] * cost[model_name]['completion'] / 1000
         )
+        logger.info('Total tokens: %d', meta['total_tokens'])
+        logger.info('Request cost: $%f' % meta['request_cost'])
 
         # The message can have either call_function or a content.
         message = response["choices"][0]["message"]

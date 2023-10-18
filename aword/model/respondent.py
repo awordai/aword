@@ -61,6 +61,7 @@ class OAIRespondent:
                 temperature=temperature,
             )
         except Exception as e:
+            self.logger.info('Call to openai failed with: %s', str(e))
             # This means that the request was not correctly formed, do not try again
             if attempts and not isinstance(e, E.AwordModelRequestError):
                 time.sleep(0.5)
