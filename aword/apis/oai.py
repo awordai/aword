@@ -138,6 +138,10 @@ def chat_completion_request(
                 'prompt': 0.03,
                 'completion': 0.06,
             },
+            'gpt-4-1106-preview': {
+                'prompt': 0.01,
+                'completion': 0.03,
+            },
         }
 
         response = openai.ChatCompletion.create(**args)
